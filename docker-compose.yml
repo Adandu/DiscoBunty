@@ -1,6 +1,6 @@
 services:
   ubuntu-manager-bot:
-    image: ghcr.io/adandu/discord-ubuntu-manager-bot-antigravity:latest
+    image: ghcr.io/adandu/discord-ubuntu-manager-bot:latest
     # build: . # Uncomment to build locally
     container_name: discord-ubuntu-manager
     restart: unless-stopped
