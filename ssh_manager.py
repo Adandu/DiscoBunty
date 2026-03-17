@@ -83,24 +83,30 @@ class SSHManager:
 
         try:
             if auth_method == 'key':
-                # Get key value (from config dict or legacy secret_env)
+                # Get key value
                 key_value = config.get('key') or os.getenv(config.get('secret_env', ''))
                 
                 if not key_value:
                     return f"Error: SSH Key not provided for '{alias}'."
 
-                # Check if key_value is a path to a file (volume mount)
-                if os.path.exists(key_value) and os.path.isfile(key_value):
+                # If the value looks like a path (starts with /), treat it as a file
+                if key_value.startswith('/') or (os.path.exists(key_value) and os.path.isfile(key_value)):
+                    if not os.path.exists(key_value):
+                        return f"Error: SSH Key file not found at '{key_value}' for '{alias}'."
                     client.connect(hostname=host, port=port, username=user, key_filename=key_value, timeout=10)
                 else:
-                    # Treat as raw key string
-                    try:
-                        private_key = paramiko.RSAKey.from_private_key(io.StringIO(key_value))
-                    except:
+                    # Treat as raw key string - try multiple formats
+                    private_key = None
+                    key_errors = []
+                    for key_class in [paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey]:
                         try:
-                            private_key = paramiko.Ed25519Key.from_private_key(io.StringIO(key_value))
-                        except Exception as key_err:
-                            return f"Error: Could not parse SSH key string for '{alias}': {key_err}"
+                            private_key = key_class.from_private_key(io.StringIO(key_value))
+                            if private_key: break
+                        except Exception as e:
+                            key_errors.append(f"{key_class.__name__}: {str(e)}")
+                    
+                    if not private_key:
+                        return f"Error: Could not parse SSH key string for '{alias}'. Errors: {'; '.join(key_errors)}"
                     
                     client.connect(hostname=host, port=port, username=user, pkey=private_key, timeout=10)
             else:
