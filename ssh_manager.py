@@ -112,6 +112,7 @@ class SSHManager:
         """Fetch CPU, RAM, Disk, Load, and Uptime for the server."""
         # Combine several commands to get a full snapshot
         # CPU usage (100 - idle), Memory (Used/Total), Disk (Used/Total on /), Load Avg, Uptime
+        # Plus Network Interfaces and Total Traffic
         cmd = (
             "echo \"[CPU Usage]\" && "
             "grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf \"%.1f%%\\n\", usage}' && "
@@ -119,6 +120,10 @@ class SSHManager:
             "free -h | awk '/^Mem:/ {print $3 \"/\" $2}' && "
             "echo \"\\n[Disk Usage (root)]\" && "
             "df -h / | awk 'NR==2 {print $3 \"/\" $2 \" (\" $5 \")\"}' && "
+            "echo \"\\n[Network Interfaces]\" && "
+            "ip -4 -br addr show | awk '{print $1 \" -> \" $3}' && "
+            "echo \"\\n[Total Traffic (RX/TX)]\" && "
+            "cat /proc/net/dev | awk 'NR>2 {printf \"%s RX: %.2f GB, TX: %.2f GB\\n\", $1, $2/1024/1024/1024, $10/1024/1024/1024}' | sed 's/://' && "
             "echo \"\\n[Load Average]\" && "
             "cat /proc/loadavg | awk '{print $1 \", \" $2 \", \" $3}' && "
             "echo \"\\n[Uptime]\" && "
