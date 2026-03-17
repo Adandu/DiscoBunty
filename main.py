@@ -45,10 +45,69 @@ async def server_autocomplete(
         for alias in aliases if current.lower() in alias.lower()
     ]
 
+# --- Helper: Autocomplete for Containers ---
+async def container_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    # Get the "server" value already selected in the interaction
+    server = interaction.namespace.server
+    if not server:
+        return []
+    
+    # This might be slow if many containers, but usually acceptable for homelab
+    containers = ssh_manager.get_containers(server)
+    return [
+        app_commands.Choice(name=name, value=name)
+        for name in containers if current.lower() in name.lower()
+    ][:25] # Discord limit is 25 choices
+
 # --- Commands ---
 @bot.tree.command(name="ping", description="Check bot latency")
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message(f'Pong! {round(bot.latency * 1000)}ms')
+
+# --- Docker Command Group ---
+docker_group = app_commands.Group(name="docker", description="Manage Docker containers")
+
+@docker_group.command(name="ps", description="List containers on a server")
+@app_commands.autocomplete(server=server_autocomplete)
+async def docker_ps(interaction: discord.Interaction, server: str, all: bool = True):
+    await interaction.response.defer()
+    cmd = "sudo docker ps -a" if all else "sudo docker ps"
+    output = ssh_manager.execute_command(server, cmd)
+    await interaction.followup.send(f"**Containers on `{server}`:**\n```\n{output[:1900]}\n```")
+
+@docker_group.command(name="control", description="Start, stop, or restart a container")
+@app_commands.autocomplete(server=server_autocomplete, container=container_autocomplete)
+@app_commands.describe(action="The action to perform (start, stop, restart)")
+@app_commands.choices(action=[
+    app_commands.Choice(name="start", value="start"),
+    app_commands.Choice(name="stop", value="stop"),
+    app_commands.Choice(name="restart", value="restart"),
+])
+async def docker_control(interaction: discord.Interaction, server: str, action: str, container: str):
+    await interaction.response.defer()
+    output = ssh_manager.container_action(server, container, action)
+    await interaction.followup.send(f"**Action `{action}` on container `{container}` (`{server}`):**\n```\n{output[:1900]}\n```")
+
+@docker_group.command(name="logs", description="View container logs")
+@app_commands.autocomplete(server=server_autocomplete, container=container_autocomplete)
+@app_commands.describe(lines="Number of lines to display")
+async def docker_logs(interaction: discord.Interaction, server: str, container: str, lines: int = 50):
+    await interaction.response.defer()
+    lines = min(max(1, lines), 100)
+    output = ssh_manager.get_container_logs(server, container, lines)
+    await interaction.followup.send(f"**Logs for `{container}` on `{server}` (Last {lines} lines):**\n```\n{output[:1900]}\n```")
+
+@docker_group.command(name="details", description="View container image, IP, and ports")
+@app_commands.autocomplete(server=server_autocomplete, container=container_autocomplete)
+async def docker_details(interaction: discord.Interaction, server: str, container: str):
+    await interaction.response.defer()
+    output = ssh_manager.get_container_details(server, container)
+    await interaction.followup.send(f"**Details for `{container}` on `{server}`:**\n```\n{output[:1900]}\n```")
+
+bot.tree.add_command(docker_group)
 
 @bot.tree.command(name="disk", description="Check disk space on a specific Ubuntu server")
 @app_commands.autocomplete(server=server_autocomplete)

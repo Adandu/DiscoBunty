@@ -23,6 +23,10 @@ Whoever wants to use this bot, they do so at their own risk. The authors and cre
   - `/service`: Start, Stop, Restart, or check the Status of any systemd service.
   - `/logs`: Tail the last N lines of any log file.
   - `/disk`: Check disk space usage (`df -h`).
+  - `/docker ps`: List all containers (with optional `--all` filter).
+  - `/docker control`: Start, Stop, or Restart a specific container.
+  - `/docker logs`: View the last N lines of container logs.
+  - `/docker details`: View container image, internal IP, and port mappings.
 
 ---
 
@@ -110,9 +114,9 @@ docker-compose up -d
 
 ## 🔒 Security Recommendations
 - **Dedicated User:** Create a dedicated user on your Ubuntu servers for the bot (e.g., `discord-bot`).
-- **Sudo Access:** To use `/update` or `/service`, ensure the user has `sudo` permissions without a password.
+- **Sudo Access:** To use `/update`, `/service`, or `/docker`, ensure the user has `sudo` permissions without a password.
   - **Edit sudoers:** `sudo visudo`
-  - **Add line:** `discord-bot ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/systemctl, /usr/bin/tail, /usr/bin/df`
+  - **Add line:** `discord-bot ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/systemctl, /usr/bin/tail, /usr/bin/df, /usr/bin/docker`
 - **SSH Keys:** Always prefer SSH Keys over passwords for better security.
 
 ---

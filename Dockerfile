@@ -26,8 +26,7 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/pyth
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application code
-COPY main.py .
-COPY ssh_manager.py .
+COPY . .
 
 # Command to run the bot
 CMD ["python", "main.py"]

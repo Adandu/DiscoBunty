@@ -54,7 +54,8 @@ class SSHManager:
 
         try:
             if auth_method == 'key':
-                # Handle Private Key
+                # Handle Private Key (assuming it's a string in the ENV var)
+                # We use io.StringIO to treat the string as a file object
                 private_key = paramiko.RSAKey.from_private_key(io.StringIO(secret_value))
                 client.connect(hostname=host, port=port, username=user, pkey=private_key, timeout=10)
             else:
@@ -71,3 +72,38 @@ class SSHManager:
 
         except Exception as e:
             return f"SSH Error on '{alias}': {str(e)}"
+
+    def get_containers(self, alias: str) -> List[str]:
+        """Fetch all container names from a server for autocomplete."""
+        # Use --all to include stopped containers
+        cmd = "sudo docker ps -a --format '{{.Names}}'"
+        output = self.execute_command(alias, cmd)
+        
+        if "SSH Error" in output or "Error:" in output:
+            return []
+            
+        containers = [name.strip() for name in output.split('\n') if name.strip()]
+        return containers
+
+    def container_action(self, alias: str, container_name: str, action: str) -> str:
+        """Perform action (start, stop, restart) on a specific container."""
+        cmd = f"sudo docker {action} {container_name}"
+        return self.execute_command(alias, cmd)
+
+    def get_container_logs(self, alias: str, container_name: str, lines: int = 50) -> str:
+        """Fetch recent logs for a container."""
+        cmd = f"sudo docker logs --tail {lines} {container_name}"
+        return self.execute_command(alias, cmd)
+
+    def get_container_details(self, alias: str, container_name: str) -> str:
+        """Fetch image, IP, and ports for a container using docker inspect."""
+        # Format the inspect output to get specific fields
+        # Added 'if $conf' to prevent failure on exposed-only but unmapped ports
+        format_str = (
+            "Status: {{.State.Status}}\\n"
+            "Image: {{.Config.Image}}\\n"
+            "IP Address: {{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}\\n"
+            "Ports: {{range $p, $conf := .NetworkSettings.Ports}}{{$p}}{{if $conf}} -> {{(index $conf 0).HostPort}}{{end}} {{end}}"
+        )
+        cmd = f"sudo docker inspect --format '{format_str}' {container_name}"
+        return self.execute_command(alias, cmd)
