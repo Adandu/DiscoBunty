@@ -1,4 +1,4 @@
-# 🐰 DiscoBunty
+# <img src="logo_hybrid.svg" width="48" height="48" valign="middle"> DiscoBunty
 
 Manage remote Ubuntu servers via SSH and Discord Slash Commands. Run it as a Docker container and control your infrastructure directly from Discord.
 
