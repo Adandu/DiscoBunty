@@ -13,7 +13,7 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger('discord-ubuntu-manager')
+logger = logging.getLogger('discobunty')
 
 # Load environment variables
 load_dotenv()
@@ -25,7 +25,7 @@ ENABLE_DOCKER = os.getenv('ENABLE_DOCKER', 'false').lower() == 'true'
 # Initialize SSH Manager
 ssh_manager = SSHManager()
 
-class UbuntuManagerBot(discord.Client):
+class DiscoBunty(discord.Client):
     def __init__(self):
         intents = discord.Intents.default()
         super().__init__(intents=intents)
@@ -39,7 +39,7 @@ class UbuntuManagerBot(discord.Client):
         else:
             await self.tree.sync()
 
-bot = UbuntuManagerBot()
+bot = DiscoBunty()
 
 @bot.event
 async def on_ready():

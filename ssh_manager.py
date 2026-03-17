@@ -5,7 +5,7 @@ import io
 import logging
 from typing import List, Dict, Optional
 
-logger = logging.getLogger('discord-ubuntu-manager.ssh')
+logger = logging.getLogger('discobunty.ssh')
 
 class SSHManager:
     def __init__(self):

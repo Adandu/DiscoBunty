@@ -1,4 +1,4 @@
-# Discord Ubuntu Manager Bot
+# 🐰 DiscoBunty
 
 Manage remote Ubuntu servers via SSH and Discord Slash Commands. Run it as a Docker container and control your infrastructure directly from Discord.
 
@@ -36,7 +36,7 @@ To use this bot, you must first create a Discord Application and get a Bot Token
 
 ### 1. Create the Bot & Get Token
 1.  **Go to the [Discord Developer Portal](https://discord.com/developers/applications).**
-2.  Click **"New Application"** and give it a name (e.g., `Ubuntu Server Manager`).
+2.  Click **"New Application"** and give it a name (e.g., `DiscoBunty`).
 3.  Go to the **"Bot"** tab on the left sidebar.
 4.  Click **"Reset Token"** (if needed) and **Copy the Token**. Save this for your `.env` file (`DISCORD_TOKEN`).
 5.  (Optional but recommended) Under **"Privileged Gateway Intents"**, enable **"Server Members Intent"** and **"Message Content Intent"**.
@@ -65,7 +65,7 @@ To ensure the bot works correctly in a specific channel (especially private ones
 1.  **Right-click** on the channel name in the channel list.
 2.  Select **"Edit Channel"**.
 3.  Go to the **"Permissions"** tab.
-4.  Under **"Roles/Members"**, click the **"+"** sign and find your bot (e.g., `Ubuntu Server Manager`).
+4.  Under **"Roles/Members"**, click the **"+"** sign and find your bot (e.g., `DiscoBunty`).
 5.  Ensure the following permissions are enabled (checked Green):
     - `View Channel`
     - `Send Messages`

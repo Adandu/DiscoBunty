@@ -1,8 +1,8 @@
 services:
-  ubuntu-manager-bot:
-    image: ghcr.io/adandu/discord-ubuntu-manager-bot:latest
+  discobunty:
+    image: ghcr.io/adandu/discobunty:latest
     # build: . # Uncomment to build locally
-    container_name: discord-ubuntu-manager
+    container_name: discobunty
     restart: unless-stopped
     env_file:
       - .env
