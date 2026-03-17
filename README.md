@@ -92,7 +92,7 @@ DiscoBunty supports two ways to handle SSH keys:
 #### A. Volume Bind Mount (Recommended)
 Place your `.key` files in a local folder named `./ssh_keys` and mount it in `docker-compose.yml`. Then point the variable to the path inside the container:
 ```bash
-DISCORD_UBUNTU_SERVER_KEY_1=/app/ssh_keys/masterchief.key
+DISCORD_UBUNTU_SERVER_KEY_1=/app/ssh_keys/ServerName.key
 ```
 
 #### B. Raw Environment Variable
