@@ -4,6 +4,7 @@ import paramiko
 import io
 import logging
 import shlex
+import time
 from typing import List, Dict, Optional
 
 logger = logging.getLogger('discobunty.ssh')
@@ -11,6 +12,7 @@ logger = logging.getLogger('discobunty.ssh')
 class SSHManager:
     def __init__(self):
         self.servers = self._load_servers()
+        self._log_cache = {} # Cache for log file lists: {alias: (timestamp, [files])}
 
     def _load_servers(self) -> List[Dict]:
         """Load servers from individual environment variables or SERVERS_JSON."""
@@ -214,3 +216,27 @@ class SSHManager:
             "uptime -p"
         )
         return self.execute_command(alias, cmd)
+
+    def get_log_files(self, alias: str) -> List[str]:
+        """Fetch a list of common log files for autocomplete, with 5-min caching."""
+        now = time.time()
+        if alias in self._log_cache:
+            ts, files = self._log_cache[alias]
+            if now - ts < 300: # 5 minute cache
+                return files
+
+        # Find log files in /var/log and home directories, limiting depth and results
+        # Focused on .log files and common linux logs
+        cmd = (
+            "sudo find /var/log /home -maxdepth 3 -type f "
+            "\\( -name \"*.log\" -o -name \"syslog\" -o -name \"auth.log\" -o -name \"kern.log\" \\) "
+            "2>/dev/null | head -n 50"
+        )
+        output = self.execute_command(alias, cmd)
+        
+        if "SSH Error" in output or "Error:" in output:
+            return []
+            
+        files = [f.strip() for f in output.split('\n') if f.strip()]
+        self._log_cache[alias] = (now, files)
+        return files

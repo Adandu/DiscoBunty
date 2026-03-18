@@ -113,6 +113,25 @@ async def container_autocomplete(
         logger.error(f"Error fetching containers for {server}: {e}")
         return []
 
+# --- Helper: Autocomplete for Logs ---
+async def log_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    server = interaction.namespace.server
+    if not server:
+        return []
+    
+    try:
+        logs = ssh_manager.get_log_files(server)
+        return [
+            app_commands.Choice(name=path, value=path)
+            for path in logs if current.lower() in path.lower()
+        ][:25]
+    except Exception as e:
+        logger.error(f"Error fetching logs for {server}: {e}")
+        return []
+
 # --- Commands ---
 @bot.tree.command(name="ping", description="Check bot latency")
 async def ping(interaction: discord.Interaction):
@@ -280,7 +299,7 @@ async def service(interaction: discord.Interaction, server: str, action: str, na
 
 @bot.tree.command(name="logs", description="View recent log entries on a specific Ubuntu server")
 @is_admin()
-@app_commands.autocomplete(server=server_autocomplete)
+@app_commands.autocomplete(server=server_autocomplete, path=log_autocomplete)
 @app_commands.describe(path="Path to the log file (e.g., /var/log/syslog)", lines="Number of lines to display")
 async def logs(interaction: discord.Interaction, server: str, path: str, lines: int = 20):
     logger.info(f"Command '/logs' for path '{path}' on server '{server}' (lines={lines}) used by {interaction.user}")
