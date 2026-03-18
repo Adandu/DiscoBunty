@@ -2,6 +2,7 @@ import os
 import logging
 import discord
 import shlex
+import asyncio
 from discord import app_commands
 from dotenv import load_dotenv
 from ssh_manager import SSHManager
@@ -57,16 +58,20 @@ async def on_ready():
         logger.info(f'Allowed Roles: {ALLOWED_ROLES}')
     logger.info('------')
 
-# --- RBAC Check ---
+# --- RBAC Helper ---
+def check_permissions(user) -> bool:
+    """Helper to check if a user has required roles (fails closed)."""
+    if not ALLOWED_ROLES:
+        return False
+    if not hasattr(user, 'roles'):
+        return False
+    user_roles = [role.name for role in user.roles]
+    return any(role in ALLOWED_ROLES for role in user_roles)
+
+# --- RBAC Check Decorator ---
 def is_admin():
     def predicate(interaction: discord.Interaction) -> bool:
-        # Fail closed: if no roles are configured, nobody is admin
-        if not ALLOWED_ROLES:
-            return False
-        if not hasattr(interaction.user, 'roles'):
-            return False
-        user_roles = [role.name for role in interaction.user.roles]
-        return any(role in ALLOWED_ROLES for role in user_roles)
+        return check_permissions(interaction.user)
     return app_commands.check(predicate)
 
 @bot.tree.error
@@ -97,14 +102,17 @@ async def container_autocomplete(
     interaction: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[str]]:
-    # Get the "server" value already selected in the interaction
+    # 🛡️ RBAC: Don't leak container names to non-admins
+    if not check_permissions(interaction.user):
+        return []
+
     server = interaction.namespace.server
     if not server:
         return []
     
-    # This might be slow if many containers, but usually acceptable for homelab
     try:
-        containers = ssh_manager.get_containers(server)
+        # 🚀 Async: Offload SSH call to a thread to avoid blocking loop
+        containers = await asyncio.to_thread(ssh_manager.get_containers, server)
         return [
             app_commands.Choice(name=name, value=name)
             for name in containers if current.lower() in name.lower()
@@ -118,12 +126,17 @@ async def log_autocomplete(
     interaction: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[str]]:
+    # 🛡️ RBAC: Don't leak log paths to non-admins
+    if not check_permissions(interaction.user):
+        return []
+
     server = interaction.namespace.server
     if not server:
         return []
     
     try:
-        logs = ssh_manager.get_log_files(server)
+        # 🚀 Async: Offload SSH call to a thread to avoid blocking loop
+        logs = await asyncio.to_thread(ssh_manager.get_log_files, server)
         return [
             app_commands.Choice(name=path, value=path)
             for path in logs if current.lower() in path.lower()
@@ -145,7 +158,7 @@ async def stats(interaction: discord.Interaction, server: str):
     logger.info(f"Command '/stats' for server '{server}' used by {interaction.user}")
     await interaction.response.defer()
     try:
-        output = ssh_manager.get_system_stats(server)
+        output = await asyncio.to_thread(ssh_manager.get_system_stats, server)
         await interaction.followup.send(f"**System Stats for `{server}`:**\n```\n{output[:MAX_MSG_LEN]}\n```")
     except Exception as e:
         logger.error(f"Error executing '/stats' for {server}: {e}")
@@ -163,7 +176,7 @@ if ENABLE_DOCKER:
         await interaction.response.defer()
         try:
             cmd = "sudo docker ps -a" if all else "sudo docker ps"
-            output = ssh_manager.execute_command(server, cmd)
+            output = await asyncio.to_thread(ssh_manager.execute_command, server, cmd)
             await interaction.followup.send(f"**Containers on `{server}`:**\n```\n{output[:MAX_MSG_LEN]}\n```")
         except Exception as e:
             logger.error(f"Error executing '/docker ps' for {server}: {e}")
@@ -182,7 +195,7 @@ if ENABLE_DOCKER:
         logger.info(f"Command '/docker control {action}' for container '{container}' on server '{server}' used by {interaction.user}")
         await interaction.response.defer()
         try:
-            output = ssh_manager.container_action(server, container, action)
+            output = await asyncio.to_thread(ssh_manager.container_action, server, container, action)
             await interaction.followup.send(f"**Action `{action}` on container `{container}` (`{server}`):**\n```\n{output[:MAX_MSG_LEN]}\n```")
         except Exception as e:
             logger.error(f"Error executing '/docker control {action}' for {container} on {server}: {e}")
@@ -197,7 +210,7 @@ if ENABLE_DOCKER:
         await interaction.response.defer()
         try:
             lines = min(max(1, lines), 100)
-            output = ssh_manager.get_container_logs(server, container, lines)
+            output = await asyncio.to_thread(ssh_manager.get_container_logs, server, container, lines)
             await interaction.followup.send(f"**Logs for `{container}` on `{server}` (Last {lines} lines):**\n```\n{output[:MAX_MSG_LEN]}\n```")
         except Exception as e:
             logger.error(f"Error executing '/docker logs' for {container} on {server}: {e}")
@@ -210,7 +223,7 @@ if ENABLE_DOCKER:
         logger.info(f"Command '/docker details' for container '{container}' on server '{server}' used by {interaction.user}")
         await interaction.response.defer()
         try:
-            output = ssh_manager.get_container_details(server, container)
+            output = await asyncio.to_thread(ssh_manager.get_container_details, server, container)
             await interaction.followup.send(f"**Details for `{container}` on `{server}`:**\n```\n{output[:MAX_MSG_LEN]}\n```")
         except Exception as e:
             logger.error(f"Error executing '/docker details' for {container} on {server}: {e}")
@@ -225,7 +238,7 @@ async def disk(interaction: discord.Interaction, server: str):
     logger.info(f"Command '/disk' for server '{server}' used by {interaction.user}")
     await interaction.response.defer()
     try:
-        output = ssh_manager.execute_command(server, "df -h")
+        output = await asyncio.to_thread(ssh_manager.execute_command, server, "df -h")
         await interaction.followup.send(f"**Disk Space on `{server}`:**\n```\n{output[:MAX_MSG_LEN]}\n```")
     except Exception as e:
         logger.error(f"Error executing '/disk' for {server}: {e}")
@@ -240,7 +253,7 @@ async def update(interaction: discord.Interaction, server: str):
     try:
         # Using -y for non-interactive upgrade. Note: sudo might need NOPASSWD config.
         cmd = "sudo apt-get update && sudo apt-get upgrade -y"
-        output = ssh_manager.execute_command(server, cmd)
+        output = await asyncio.to_thread(ssh_manager.execute_command, server, cmd)
         await interaction.followup.send(f"**Update Result for `{server}`:**\n```\n{output[:MAX_MSG_LEN]}\n```")
     except Exception as e:
         logger.error(f"Error executing '/update' for {server}: {e}")
@@ -257,7 +270,7 @@ async def process(interaction: discord.Interaction, server: str, search: str):
         safe_search = shlex.quote(search)
         # Case-insensitive grep, excluding the grep process itself
         cmd = f"ps aux | grep -i {safe_search} | grep -v grep"
-        output = ssh_manager.execute_command(server, cmd)
+        output = await asyncio.to_thread(ssh_manager.execute_command, server, cmd)
         if not output.strip():
             output = f"No processes found matching '{search}'."
         await interaction.followup.send(f"**Processes on `{server}` (Search: '{search}'):**\n```\n{output[:MAX_MSG_LEN]}\n```")
@@ -284,7 +297,7 @@ async def service(interaction: discord.Interaction, server: str, action: str, na
         safe_name = shlex.quote(name)
         cmd = f"sudo systemctl {safe_action} {safe_name}"
         # For status, we want to see the output. For others, just a confirmation if no error.
-        output = ssh_manager.execute_command(server, cmd)
+        output = await asyncio.to_thread(ssh_manager.execute_command, server, cmd)
         
         response_msg = f"**Service `{name}` {action} on `{server}`**"
         if output.strip():
@@ -317,7 +330,7 @@ async def logs(interaction: discord.Interaction, server: str, path: str, lines: 
         # Remote-side symlink check for defense-in-depth: resolve symlinks and check again
         allowed_pattern = "^(" + "|".join(ALLOWED_LOG_ROOTS) + ")"
         cmd = f"realpath {safe_path} | grep -qE {shlex.quote(allowed_pattern)} && sudo tail -n {lines} {safe_path}"
-        output = ssh_manager.execute_command(server, cmd)
+        output = await asyncio.to_thread(ssh_manager.execute_command, server, cmd)
         
         if not output.strip() and "Error" not in output:
              output = "Access denied or file empty (remote-side validation failed)."
