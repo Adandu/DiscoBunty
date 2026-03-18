@@ -3,6 +3,7 @@ import json
 import paramiko
 import io
 import logging
+import shlex
 from typing import List, Dict, Optional
 
 logger = logging.getLogger('discobunty.ssh')
@@ -79,7 +80,20 @@ class SSHManager:
 
         # Setup SSH Client
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        known_hosts_path = os.getenv('KNOWN_HOSTS_FILE', '/app/.ssh/known_hosts')
+        if os.path.exists(known_hosts_path):
+            try:
+                client.load_host_keys(known_hosts_path)
+                client.set_missing_host_key_policy(paramiko.RejectPolicy())
+                logger.info(f"Loaded known_hosts from {known_hosts_path}")
+            except Exception as e:
+                logger.error(f"Failed to load known_hosts: {e}")
+                return f"Error: Failed to load SSH known_hosts from {known_hosts_path}."
+        else:
+            # Require known_hosts for production-ready security
+            err_msg = f"Error: No known_hosts file found at {known_hosts_path}. SSH connection aborted for security."
+            logger.error(err_msg)
+            return err_msg
 
         try:
             if auth_method == 'key':
@@ -97,16 +111,15 @@ class SSHManager:
                 else:
                     # Treat as raw key string - try multiple formats
                     private_key = None
-                    key_errors = []
                     for key_class in [paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey]:
                         try:
                             private_key = key_class.from_private_key(io.StringIO(key_value))
                             if private_key: break
-                        except Exception as e:
-                            key_errors.append(f"{key_class.__name__}: {str(e)}")
+                        except Exception:
+                            continue
                     
                     if not private_key:
-                        return f"Error: Could not parse SSH key string for '{alias}'. Errors: {'; '.join(key_errors)}"
+                        return f"Error: Could not parse SSH key string for '{alias}'. Ensure the format is correct."
                     
                     client.connect(hostname=host, port=port, username=user, pkey=private_key, timeout=10)
             else:
@@ -121,9 +134,10 @@ class SSHManager:
             output = stdout.read().decode('utf-8')
             error = stderr.read().decode('utf-8')
 
-            client.close()
-            
-            if error and not output:
+            # If there's error output but also stdout, return both to be helpful
+            if error and output:
+                return f"{output}\n[Error Output]\n{error}"
+            elif error:
                 logger.warning(f"Command on '{alias}' produced error output: {error.strip()}")
                 return error
             
@@ -133,6 +147,8 @@ class SSHManager:
             err_msg = f"SSH Error on '{alias}': {str(e)}"
             logger.error(err_msg)
             return err_msg
+        finally:
+            client.close()
 
     def get_containers(self, alias: str) -> List[str]:
         """Fetch all container names from a server for autocomplete."""
@@ -148,12 +164,18 @@ class SSHManager:
 
     def container_action(self, alias: str, container_name: str, action: str) -> str:
         """Perform action (start, stop, restart) on a specific container."""
-        cmd = f"sudo docker {action} {container_name}"
+        # Sanitize inputs
+        safe_action = shlex.quote(action)
+        safe_container = shlex.quote(container_name)
+        cmd = f"sudo docker {safe_action} {safe_container}"
         return self.execute_command(alias, cmd)
 
     def get_container_logs(self, alias: str, container_name: str, lines: int = 50) -> str:
         """Fetch recent logs for a container."""
-        cmd = f"sudo docker logs --tail {lines} {container_name}"
+        # Sanitize inputs
+        safe_lines = shlex.quote(str(lines))
+        safe_container = shlex.quote(container_name)
+        cmd = f"sudo docker logs --tail {safe_lines} {safe_container}"
         return self.execute_command(alias, cmd)
 
     def get_container_details(self, alias: str, container_name: str) -> str:
@@ -166,7 +188,8 @@ class SSHManager:
             "IP Address: {{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}\n"
             "Ports: {{range $p, $conf := .NetworkSettings.Ports}}{{$p}}{{if $conf}} -> {{(index $conf 0).HostPort}}{{end}} {{end}}"
         )
-        cmd = f"sudo docker inspect --format '{format_str}' {container_name}"
+        safe_container = shlex.quote(container_name)
+        cmd = f"sudo docker inspect --format '{format_str}' {safe_container}"
         return self.execute_command(alias, cmd)
 
     def get_system_stats(self, alias: str) -> str:
