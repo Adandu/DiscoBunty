@@ -1,5 +1,5 @@
-# Use official Python slim image (Pinned to 3.11.11-slim-bookworm for reproducibility)
-FROM python:3.11.11-slim-bookworm@sha256:080000300df6664294f61821f93ca60f6eeec92c3a039da983799caacda544f1 as builder
+# Use official Python slim image
+FROM python:3.11-slim-bookworm as builder
 
 # Set work directory
 WORKDIR /app
@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Final stage
-FROM python:3.11.11-slim-bookworm@sha256:080000300df6664294f61821f93ca60f6eeec92c3a039da983799caacda544f1
+FROM python:3.11-slim-bookworm
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
