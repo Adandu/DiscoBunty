@@ -4,17 +4,29 @@ services:
     # build: . # Uncomment to build locally
     container_name: discobunty
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
     volumes:
       - ./ssh_keys:/app/ssh_keys:ro
+      - ./.ssh:/app/.ssh:ro
     env_file:
       - .env
     environment:
-      - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - GUILD_ID=${GUILD_ID}
       - ENABLE_DOCKER=${ENABLE_DOCKER:-false}
       - PYTHONUNBUFFERED=1
+    networks:
+      - discobunty-net
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+networks:
+  discobunty-net:
+    driver: bridge

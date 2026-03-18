@@ -1,9 +1,12 @@
-# Environments
+# environments
 .env
 .venv
 env/
 venv/
 ENV/
+
+# Project management
+TODO.md
 
 # Python
 __pycache__/
@@ -16,3 +19,12 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# 🛡️ SSH & Secrets (Security Hardening)
+ssh_keys/
+*.key
+*.pem
+id_rsa
+id_ed25519
+known_hosts
+.ssh/
