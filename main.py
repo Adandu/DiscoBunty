@@ -208,14 +208,18 @@ if ENABLE_DOCKER:
     @docker_group.command(name="logs", description="View container logs")
     @is_admin()
     @app_commands.autocomplete(server=server_autocomplete, container=container_autocomplete)
-    @app_commands.describe(lines="Number of lines to display")
-    async def docker_logs(interaction: discord.Interaction, server: str, container: str, lines: int = 50):
-        logger.info(f"Command '/docker logs' for container '{container}' on server '{server}' (lines={lines}) used by {interaction.user}")
+    @app_commands.describe(lines="Number of lines to display", search="Optional term to search for in logs")
+    async def docker_logs(interaction: discord.Interaction, server: str, container: str, lines: int = 50, search: str = None):
+        logger.info(f"Command '/docker logs' for container '{container}' on server '{server}' (lines={lines}, search={search}) used by {interaction.user}")
         await interaction.response.defer()
         try:
             lines = min(max(1, lines), 100)
-            output = await asyncio.to_thread(ssh_manager.get_container_logs, server, container, lines)
-            await interaction.followup.send(f"**Logs for `{container}` on `{server}` (Last {lines} lines):**\n```\n{output[:MAX_MSG_LEN]}\n```")
+            output = await asyncio.to_thread(ssh_manager.get_container_logs, server, container, lines, search)
+            header = f"**Logs for `{container}` on `{server}` (Last {lines} lines"
+            if search:
+                header += f", Search: `{search}`"
+            header += "):**"
+            await interaction.followup.send(f"{header}\n```\n{output[:MAX_MSG_LEN]}\n```")
         except Exception as e:
             logger.error(f"Error executing '/docker logs' for {container} on {server}: {e}")
             await interaction.followup.send("❌ Error fetching logs.")
@@ -317,9 +321,9 @@ async def service(interaction: discord.Interaction, server: str, action: str, na
 @bot.tree.command(name="logs", description="View recent log entries on a specific Ubuntu server")
 @is_admin()
 @app_commands.autocomplete(server=server_autocomplete, path=log_autocomplete)
-@app_commands.describe(path="Path to the log file (e.g., /var/log/syslog)", lines="Number of lines to display")
-async def logs(interaction: discord.Interaction, server: str, path: str, lines: int = 20):
-    logger.info(f"Command '/logs' for path '{path}' on server '{server}' (lines={lines}) used by {interaction.user}")
+@app_commands.describe(path="Path to the log file (e.g., /var/log/syslog)", lines="Number of lines to display", search="Optional term to search for in logs")
+async def logs(interaction: discord.Interaction, server: str, path: str, lines: int = 20, search: str = None):
+    logger.info(f"Command '/logs' for path '{path}' on server '{server}' (lines={lines}, search={search}) used by {interaction.user}")
     await interaction.response.defer()
     try:
         # Path validation: must start with an allowed root
@@ -333,13 +337,25 @@ async def logs(interaction: discord.Interaction, server: str, path: str, lines: 
         safe_path = shlex.quote(path)
         # Remote-side symlink check for defense-in-depth: resolve symlinks and check again
         allowed_pattern = "^(" + "|".join(ALLOWED_LOG_ROOTS) + ")"
-        cmd = f"realpath {safe_path} | grep -qE {shlex.quote(allowed_pattern)} && sudo tail -n {lines} {safe_path}"
+        
+        if search:
+            safe_search = shlex.quote(search)
+            # Chain grep after tail, but keep the symlink/realpath check
+            cmd = f"realpath {safe_path} | grep -qE {shlex.quote(allowed_pattern)} && sudo tail -n {lines} {safe_path} | grep -i {safe_search} | tail -n {lines}"
+        else:
+            cmd = f"realpath {safe_path} | grep -qE {shlex.quote(allowed_pattern)} && sudo tail -n {lines} {safe_path}"
+            
         output = await asyncio.to_thread(ssh_manager.execute_command, server, cmd)
         
         if not output.strip() and "Error" not in output:
-             output = "Access denied or file empty (remote-side validation failed)."
+             output = "Access denied, file empty, or search term not found."
         
-        await interaction.followup.send(f"**Last {lines} lines of `{path}` on `{server}`:**\n```\n{output[:MAX_MSG_LEN]}\n```")
+        header = f"**Last {lines} lines of `{path}` on `{server}`"
+        if search:
+            header += f" (Search: `{search}`)"
+        header += ":**"
+        
+        await interaction.followup.send(f"{header}\n```\n{output[:MAX_MSG_LEN]}\n```")
     except Exception as e:
         logger.error(f"Error executing '/logs' for {path} on {server}: {e}")
         await interaction.followup.send("❌ Error fetching system logs.")

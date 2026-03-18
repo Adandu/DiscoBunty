@@ -132,7 +132,7 @@ class SSHManager:
                 client.connect(hostname=host, port=port, username=user, password=password, timeout=10)
 
             # Execute Command
-            stdin, stdout, stderr = client.exec_command(command)
+            stdin, stdout, stderr = client.exec_command(command, timeout=60)
             output = stdout.read().decode('utf-8')
             error = stderr.read().decode('utf-8')
 
@@ -172,12 +172,19 @@ class SSHManager:
         cmd = f"sudo docker {safe_action} {safe_container}"
         return self.execute_command(alias, cmd)
 
-    def get_container_logs(self, alias: str, container_name: str, lines: int = 50) -> str:
-        """Fetch recent logs for a container."""
+    def get_container_logs(self, alias: str, container_name: str, lines: int = 50, search: Optional[str] = None) -> str:
+        """Fetch recent logs for a container, optionally filtering by search term."""
         # Sanitize inputs
         safe_lines = shlex.quote(str(lines))
         safe_container = shlex.quote(container_name)
-        cmd = f"sudo docker logs --tail {safe_lines} {safe_container}"
+        
+        if search:
+            safe_search = shlex.quote(search)
+            # Use grep for search, -i for case-insensitive
+            cmd = f"sudo docker logs --tail {safe_lines} {safe_container} 2>&1 | grep -i {safe_search} | tail -n {safe_lines}"
+        else:
+            cmd = f"sudo docker logs --tail {safe_lines} {safe_container}"
+            
         return self.execute_command(alias, cmd)
 
     def get_container_details(self, alias: str, container_name: str) -> str:
