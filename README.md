@@ -29,6 +29,7 @@ Whoever wants to use this bot, they do so at their own risk. The authors and cre
   - `/service`: Start, Stop, Restart, or check the Status of any systemd service.
   - `/logs`: Tail the last N lines of any log file.
   - `/disk`: Check disk space usage (`df -h`).
+  - `/server power`: Reboot or Shutdown a server with a safety password and confirmation step.
   - `/docker ps`: List all containers (with optional `/docker` group enabled).
   - `/docker control`: Start, Stop, or Restart a specific container.
   - `/docker logs`: View the last N lines of container logs.
@@ -85,6 +86,8 @@ Edit the `.env` file with your configuration. Servers are defined using a number
 - `DISCORD_TOKEN`: Your bot token.
 - `GUILD_ID`: Your Discord Server ID for command syncing.
 - `ENABLE_DOCKER`: Set to `true` to enable the `/docker` command group.
+- `POWER_CONTROL_ENABLED`: Set to `true` to enable `/server power` (reboot/shutdown).
+- `POWER_CONTROL_PASSWORD`: A safety password required to confirm power actions.
 - `ALLOWED_ROLES`: Comma-separated list of Discord role names allowed to use administrative commands (e.g., `Admin,DevOps`).
 - `KNOWN_HOSTS_FILE`: Path to the SSH `known_hosts` file inside the container (default: `/app/.ssh/known_hosts`).
 - `DISCORD_UBUNTU_SERVER_ALIAS_N`: The nickname for server N.
