@@ -156,10 +156,12 @@ async def log_autocomplete(
 # --- Power Control UI ---
 class PowerControlModal(discord.ui.Modal, title='Verify Power Action'):
     password = discord.ui.TextInput(
-        label='Power Control Password',
-        placeholder='Enter the safety password to confirm...',
+        label='Security Password',
+        placeholder='Enter safety password (Note: Text is visible during entry)',
         style=discord.TextStyle.short,
         required=True,
+        min_length=1,
+        max_length=50
     )
 
     def __init__(self, server: str, action: str):
