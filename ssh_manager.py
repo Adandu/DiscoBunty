@@ -247,3 +247,75 @@ class SSHManager:
         files = [f.strip() for f in output.split('\n') if f.strip()]
         self._log_cache[alias] = (now, files)
         return files
+
+    def server_power_action(self, alias: str, action: str) -> str:
+        """Perform reboot or shutdown on a specific Ubuntu server."""
+        if action not in ["reboot", "shutdown"]:
+            return f"Error: Invalid action '{action}'. Use 'reboot' or 'shutdown'."
+            
+        # Commands: sudo reboot, sudo shutdown -h now
+        cmd = "sudo reboot" if action == "reboot" else "sudo shutdown -h now"
+        
+        logger.info(f"Initiating {action} on '{alias}' via command: {cmd}")
+        
+        # We wrap in a try-except because the SSH connection will be dropped immediately
+        try:
+            # We don't use execute_command because it waits for output and closes the client itself.
+            # Here we want to send the command and expect the connection to drop.
+            config = self.get_server_by_alias(alias)
+            if not config:
+                return f"Error: Server alias '{alias}' not found."
+
+            # Re-use internal logic for setup
+            import paramiko # Re-importing just in case, though it's global
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # Defaulting to auto-add for this action for simplicity, or we could load keys
+            
+            # Since we need the client connection logic, let's just use a simplified version
+            host = config.get('host')
+            user = config.get('user', 'root')
+            port = config.get('port', 22)
+            auth_method = config.get('auth_method', 'key')
+
+            # Load known_hosts (copied logic from execute_command for safety)
+            known_hosts_path = os.getenv('KNOWN_HOSTS_FILE', '/app/.ssh/known_hosts')
+            if os.path.exists(known_hosts_path):
+                client.load_host_keys(known_hosts_path)
+                client.set_missing_host_key_policy(paramiko.RejectPolicy())
+            else:
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            if auth_method == 'key':
+                key_value = config.get('key') or os.getenv(config.get('secret_env', ''))
+                if key_value.startswith('/') or (os.path.exists(key_value) and os.path.isfile(key_value)):
+                    client.connect(hostname=host, port=port, username=user, key_filename=key_value, timeout=10)
+                else:
+                    import io
+                    private_key = None
+                    for key_class in [paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey]:
+                        try:
+                            private_key = key_class.from_private_key(io.StringIO(key_value))
+                            if private_key: break
+                        except Exception: continue
+                    client.connect(hostname=host, port=port, username=user, pkey=private_key, timeout=10)
+            else:
+                password = config.get('password') or os.getenv(config.get('secret_env', ''))
+                client.connect(hostname=host, port=port, username=user, password=password, timeout=10)
+
+            # Send command
+            transport = client.get_transport()
+            channel = transport.open_session()
+            channel.exec_command(cmd)
+            # We don't wait for output, as the server will reboot.
+            return f"✅ Command `{cmd}` sent to `{alias}`. Server is {action}ing..."
+
+        except Exception as e:
+            # If it's a "Connection reset" or "EOF", it's likely the server dropping the connection which is expected
+            if "EOFError" in str(type(e)) or "Connection reset" in str(e):
+                return f"✅ Command `{cmd}` sent to `{alias}`. Server is {action}ing (Connection lost as expected)."
+            
+            err_msg = f"SSH Error during {action} on '{alias}': {str(e)}"
+            logger.error(err_msg)
+            return err_msg
+        finally:
+            client.close()

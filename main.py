@@ -25,6 +25,10 @@ GUILD_ID = os.getenv('GUILD_ID') # Optional: For faster command sync
 ENABLE_DOCKER = os.getenv('ENABLE_DOCKER', 'false').lower() == 'true'
 ALLOWED_ROLES = [r.strip() for r in os.getenv('ALLOWED_ROLES', '').split(',') if r.strip()]
 
+# Power Control Settings
+POWER_CONTROL_ENABLED = os.getenv('POWER_CONTROL_ENABLED', 'false').lower() == 'true'
+POWER_CONTROL_PASSWORD = os.getenv('POWER_CONTROL_PASSWORD', '')
+
 # Constants
 MAX_MSG_LEN = 1900
 ALLOWED_LOG_ROOTS = ["/var/log/", "/home/"] # Paths allowed for the /logs command
@@ -149,11 +153,73 @@ async def log_autocomplete(
         logger.error(f"Error fetching logs for {server}: {e}")
         return []
 
+# --- Power Control UI ---
+class PowerControlModal(discord.ui.Modal, title='Verify Power Action'):
+    password = discord.ui.TextInput(
+        label='Power Control Password',
+        placeholder='Enter the safety password to confirm...',
+        style=discord.TextStyle.short,
+        required=True,
+    )
+
+    def __init__(self, server: str, action: str):
+        super().__init__()
+        self.server = server
+        self.action = action
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if self.password.value != POWER_CONTROL_PASSWORD:
+            await interaction.response.send_message("❌ Incorrect password. Action aborted.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        try:
+            output = await asyncio.to_thread(ssh_manager.server_power_action, self.server, self.action)
+            await interaction.followup.send(output, ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error during {self.action} on {self.server}: {e}")
+            await interaction.followup.send(f"❌ An error occurred during {self.action}.", ephemeral=True)
+
+class PowerConfirmationView(discord.ui.View):
+    def __init__(self, server: str, action: str):
+        super().__init__(timeout=60)
+        self.server = server
+        self.action = action
+
+    @discord.ui.button(label='Confirm Action', style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Open the modal for password verification
+        await interaction.response.send_modal(PowerControlModal(self.server, self.action))
+        self.stop()
+
 # --- Commands ---
 @bot.tree.command(name="ping", description="Check bot latency")
 async def ping(interaction: discord.Interaction):
     logger.info(f"Command '/ping' used by {interaction.user}")
     await interaction.response.send_message(f'Pong! {round(bot.latency * 1000)}ms')
+
+@bot.tree.command(name="server", description="Server management commands")
+@is_admin()
+@app_commands.autocomplete(server=server_autocomplete)
+@app_commands.describe(action="The power action to perform (reboot, shutdown)")
+@app_commands.choices(action=[
+    app_commands.Choice(name="reboot", value="reboot"),
+    app_commands.Choice(name="shutdown", value="shutdown"),
+])
+async def server_power(interaction: discord.Interaction, server: str, action: str):
+    logger.info(f"Command '/server power {action}' for server '{server}' used by {interaction.user}")
+    
+    if not POWER_CONTROL_ENABLED:
+        await interaction.response.send_message("❌ Power control is currently disabled in the bot configuration.", ephemeral=True)
+        return
+
+    # Use a view with a confirmation button for secondary control
+    view = PowerConfirmationView(server, action)
+    await interaction.response.send_message(
+        content=f"⚠️ **Warning:** You are about to **{action}** the server `{server}`. Are you sure?",
+        view=view,
+        ephemeral=True
+    )
 
 @bot.tree.command(name="stats", description="Show system statistics (CPU, RAM, Disk, etc.) for a server")
 @is_admin()
