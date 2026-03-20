@@ -2,19 +2,19 @@ import os
 import logging
 from cryptography.fernet import Fernet
 import base64
+import hashlib
 
 logger = logging.getLogger('discobunty.crypto')
 
 class CryptoManager:
     def __init__(self, secret_key: str):
         if not secret_key or len(secret_key) < 32:
-            logger.warning("SECRET_KEY is too short or missing. Using a fallback key for testing (NOT SECURE!).")
-            # Generate a consistent but insecure fallback for demonstration if not provided
-            secret_key = "fallback-insecure-key-32-chars-long-!"
+            msg = "CRITICAL: SECRET_KEY is missing or too short (min 32 chars). Application cannot start safely."
+            logger.error(msg)
+            raise ValueError(msg)
             
         # Fernet needs a 32-byte URL-safe base64-encoded key
         # We'll use a SHA256 hash of the secret_key to ensure it's always 32 bytes
-        import hashlib
         key_32 = hashlib.sha256(secret_key.encode()).digest()
         self.fernet = Fernet(base64.urlsafe_b64encode(key_32))
 

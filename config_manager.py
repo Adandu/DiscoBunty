@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import copy
 from crypto_utils import CryptoManager
 
 logger = logging.getLogger('discobunty.config')
@@ -27,7 +28,10 @@ class ConfigManager:
     def __init__(self, config_path: str = "config.json"):
         self.config_path = config_path
         # SECRET_KEY must still come from environment for initial decryption
-        secret_key = os.getenv('SECRET_KEY', 'default-insecure-key-32-bytes-long-!!')
+        secret_key = os.getenv('SECRET_KEY')
+        if not secret_key:
+            raise ValueError("SECRET_KEY environment variable is mandatory.")
+            
         self.crypto = CryptoManager(secret_key)
         self.config = self._load_config()
 
@@ -46,7 +50,8 @@ class ConfigManager:
 
     def _migrate_from_env(self) -> dict:
         """Helper to migrate existing .env settings to the new JSON format."""
-        config = DEFAULT_CONFIG.copy()
+        # Use deepcopy to avoid mutating the global DEFAULT_CONFIG
+        config = copy.deepcopy(DEFAULT_CONFIG)
         
         # Mapping from .env keys to JSON structure
         config["discord"]["token"] = os.getenv('DISCORD_TOKEN', '')
@@ -85,12 +90,17 @@ class ConfigManager:
 
     def _process_config(self, config: dict, decrypt: bool = True) -> dict:
         """Recursively encrypt or decrypt passwords in the config."""
+        # Process Discord Token (Critical fix: Discord token is now encrypted)
+        if "discord" in config and config["discord"].get("token"):
+            t = config["discord"]["token"]
+            config["discord"]["token"] = self.crypto.decrypt(t) if decrypt else self.crypto.encrypt(t)
+
         # Process top-level passwords
-        if "features" in config and "power_control_password" in config["features"]:
+        if "features" in config and config["features"].get("power_control_password"):
             p = config["features"]["power_control_password"]
             config["features"]["power_control_password"] = self.crypto.decrypt(p) if decrypt else self.crypto.encrypt(p)
             
-        if "webui" in config and "password" in config["webui"]:
+        if "webui" in config and config["webui"].get("password"):
             p = config["webui"]["password"]
             config["webui"]["password"] = self.crypto.decrypt(p) if decrypt else self.crypto.encrypt(p)
 
@@ -109,7 +119,6 @@ class ConfigManager:
     def save_config(self, new_config: dict):
         """Save configuration to JSON file with encryption."""
         # Deep copy to avoid encrypting the in-memory config
-        import copy
         to_save = copy.deepcopy(new_config)
         to_save = self._process_config(to_save, decrypt=False)
         

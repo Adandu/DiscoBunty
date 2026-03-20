@@ -4,6 +4,8 @@ import discord
 import shlex
 import asyncio
 import json
+import hmac
+import copy
 from discord import app_commands
 from dotenv import load_dotenv
 from ssh_manager import SSHManager
@@ -265,7 +267,13 @@ if config["features"].get("enable_docker") == "true":
 
 # --- FastAPI WebUI Setup ---
 app = FastAPI(title="DiscoBunty Dashboard")
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "default-insecure-key"))
+
+# Ensure SECRET_KEY is set for session security
+MASTER_KEY = os.getenv("SECRET_KEY")
+if not MASTER_KEY:
+    raise ValueError("SECRET_KEY environment variable is mandatory for WebUI session security.")
+
+app.add_middleware(SessionMiddleware, secret_key=MASTER_KEY)
 
 # Use absolute path for templates to ensure they are found in all environments (Docker vs Local)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -273,23 +281,45 @@ templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 def is_authenticated(request: Request):
     web_pass = config["webui"].get("password")
-    if not web_pass: return True
+    if not web_pass: return False
     return request.session.get("authenticated") == True
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     if not is_authenticated(request): return RedirectResponse(url="/login")
+    
+    # Mask sensitive values before sending to the UI
+    display_config = copy.deepcopy(config)
+    display_config["discord"]["token"] = "********" if config["discord"].get("token") else ""
+    display_config["webui"]["password"] = "********" if config["webui"].get("password") else ""
+    display_config["features"]["power_control_password"] = "********" if config["features"].get("power_control_password") else ""
+    
+    # Mask server secrets
+    for s in display_config["servers"]:
+        if s.get("password"): s["password"] = "********"
+        if s.get("key") and not (s["key"].startswith('/') or os.path.isfile(s["key"])):
+            s["key"] = "********"
+
     return templates.TemplateResponse("index.html", {
-        "request": request, "config": config, "servers": config["servers"]
+        "request": request, 
+        "config": display_config, 
+        "servers": display_config["servers"],
+        "master_secret": MASTER_KEY
     })
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return HTMLResponse("<html><body style='background:#300a24;color:white;display:flex;justify-content:center;align-items:center;height:100vh;'><form method='post' style='background:#2b2d31;padding:40px;border-radius:8px;'><h2>DiscoBunty Login</h2><input type='password' name='password' style='width:100%;margin-bottom:20px;'><button type='submit' style='width:100%;background:#5865F2;color:white;border:none;padding:10px;'>Login</button></form></body></html>")
+    return HTMLResponse("<html><head><title>DiscoBunty Login</title><style>body{background:#300a24;color:white;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;}form{background:#2b2d31;padding:40px;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.5);width:300px;}h2{color:#E95420;text-align:center;}input{width:100%;padding:12px;margin-bottom:20px;border-radius:4px;border:none;background:#1e1f22;color:white;box-sizing:border-box;}button{width:100%;padding:12px;background:#5865F2;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold;}</style></head><body><form method='post'><h2>DiscoBunty Login</h2><input type='password' name='password' placeholder='Password' required autofocus><button type='submit'>Login</button></form></body></html>")
 
 @app.post("/login")
 async def login(request: Request, password: str = Form(...)):
-    if password == config["webui"].get("password"):
+    stored_pass = config["webui"].get("password", "")
+    if not stored_pass:
+        return RedirectResponse(url="/login?error=no_pass", status_code=303)
+        
+    # Use hmac.compare_digest to prevent timing attacks
+    if hmac.compare_digest(password, stored_pass):
+        request.session.clear() # Rotate session on login
         request.session["authenticated"] = True
         return RedirectResponse(url="/", status_code=303)
     return RedirectResponse(url="/login?error=1", status_code=303)
@@ -302,6 +332,14 @@ async def logout(request: Request):
 @app.post("/api/test-server")
 async def test_server(request: Request, server_data: dict):
     if not is_authenticated(request): raise HTTPException(status_code=401)
+    
+    # If password/key is masked (********), use the original from config
+    if server_data.get("alias"):
+        orig = next((s for s in config["servers"] if s["alias"] == server_data["alias"]), None)
+        if orig:
+            if server_data.get("password") == "********": server_data["password"] = orig.get("password")
+            if server_data.get("key") == "********": server_data["key"] = orig.get("key")
+
     success, message = await asyncio.to_thread(ssh_manager.test_server_connection, server_data)
     return {"success": success, "message": message}
 
@@ -309,22 +347,24 @@ async def test_server(request: Request, server_data: dict):
 async def save_config_ui(request: Request, data: dict):
     if not is_authenticated(request): raise HTTPException(status_code=401)
     
-    # Update current config dictionary from flat WebUI data or nested JSON
+    # Preserve actual values if masked (********) were sent
     if "servers" in data:
-        # Full sync mode
+        for i, s in enumerate(data["servers"]):
+            if i < len(config["servers"]):
+                orig = config["servers"][i]
+                if s.get("password") == "********": s["password"] = orig.get("password")
+                if s.get("key") == "********": s["key"] = orig.get("key")
+        
+        if data["discord"].get("token") == "********": data["discord"]["token"] = config["discord"]["token"]
+        if data["webui"].get("password") == "********": data["webui"]["password"] = config["webui"]["password"]
+        if data["features"].get("power_control_password") == "********": data["features"]["power_control_password"] = config["features"]["power_control_password"]
+
+        # Sync full mode
         config["discord"] = data.get("discord", config["discord"])
         config["features"] = data.get("features", config["features"])
         config["webui"] = data.get("webui", config["webui"])
         config["servers"] = data.get("servers", config["servers"])
-    else:
-        # Flat data mode (from original form)
-        config["discord"]["token"] = data.get("DISCORD_TOKEN", config["discord"]["token"])
-        config["discord"]["guild_id"] = data.get("GUILD_ID", config["discord"]["guild_id"])
-        config["features"]["enable_docker"] = data.get("ENABLE_DOCKER", config["features"]["enable_docker"])
-        config["features"]["power_control_enabled"] = data.get("POWER_CONTROL_ENABLED", config["features"]["power_control_enabled"])
-        config["features"]["power_control_password"] = data.get("POWER_CONTROL_PASSWORD", config["features"]["power_control_password"])
-        config["webui"]["password"] = data.get("WEB_PASSWORD", config["webui"]["password"])
-        
+    
     # Update SECRET_KEY in .env if changed
     if "SECRET_KEY" in data:
         from dotenv import set_key
