@@ -1,28 +1,29 @@
 # <img src="logo_hybrid.svg" width="48" height="48" valign="middle"> DiscoBunty
 
-Manage remote Ubuntu servers via SSH and Discord Slash Commands. Run it as a Docker container and control your infrastructure directly from Discord.
+Manage remote Ubuntu servers via SSH and Discord Slash Commands. Run it as a Docker container and control your infrastructure directly from Discord or a secure Web Control Panel.
 
 ---
 
 ## ⚠️ Disclaimer
 
-**This bot was created 100% using Gemini Code.**  
+**This bot was created 100% using AI (Gemini CLI & Claude Code).**  
 Whoever wants to use this bot, they do so at their own risk. The authors and creators are not responsible for any damage, data loss, or security breaches resulting from the use of this software. Always review the code and test in a safe environment before deploying to production.
 
 ---
 
 ## 🚀 Features
 
+- **Web Control Panel (NEW):** Securely manage your bot configuration, servers, and view live application logs from a single-page dashboard.
+- **Encrypted Configuration:** All sensitive data (Discord tokens, SSH passwords, keys) is stored encrypted in `config.json` using a master `SECRET_KEY`.
+- **Connectivity Testing:** Integrated "Test Connection" button in the WebUI to verify SSH credentials before saving.
 - **Multi-Server Support:** Manage an unlimited number of Ubuntu servers from a single bot.
-- **Easy Configuration:** Configure servers using simple numbered environment variables.
 - **Discord Autocomplete:** Seamlessly switch between servers in Discord using server aliases.
 - **Secure SSH Management:** Supports **SSH Keys** (via raw string or volume mount) and **Passwords**.
-- **Real-time Logging:** Logs commands and errors instantly to Docker logs (Unbuffered).
+- **Real-time Logging:** View live application activity directly in the WebUI or via Docker logs.
 - **Security Hardened:** 
   - **RBAC:** Restrict administrative commands to specific Discord roles.
-  - **Host Key Verification:** Strict SSH host key checking against `known_hosts`.
-  - **Input Sanitization:** All user inputs are sanitized to prevent command injection.
-  - **Log Whitelisting:** Restricted log viewing to `/var/log` and `/home`.
+  - **CSRF & Timing Attack Protection:** Enhanced security for the Web Control Panel.
+  - **Masked Secrets:** Sensitive values are hidden in the UI to prevent shoulder surfing.
 - **Slash Commands:**
   - `/update`: Run `apt update` and `apt upgrade` remotely.
   - `/process`: Search for running processes by name.
@@ -30,88 +31,45 @@ Whoever wants to use this bot, they do so at their own risk. The authors and cre
   - `/logs`: Tail the last N lines of any log file.
   - `/disk`: Check disk space usage (`df -h`).
   - `/server power`: Reboot or Shutdown a server with a safety password and confirmation step.
-  - `/docker ps`: List all containers (with optional `/docker` group enabled).
+  - `/docker ps`: List all containers.
   - `/docker control`: Start, Stop, or Restart a specific container.
   - `/docker logs`: View the last N lines of container logs.
   - `/docker details`: View container image, internal IP, and port mappings.
 
 ---
 
-## 🛠️ Discord Bot Setup (Step-by-Step)
+## 🚀 Recent Release Notes (v0.6.0)
 
-To use this bot, you must first create a Discord Application and get a Bot Token:
-
-### 1. Create the Bot & Get Token
-1.  **Go to the [Discord Developer Portal](https://discord.com/developers/applications).**
-2.  Click **"New Application"** and give it a name (e.g., `DiscoBunty`).
-3.  Go to the **"Bot"** tab on the left sidebar.
-4.  Click **"Reset Token"** (if needed) and **Copy the Token**. Save this for your `.env` file (`DISCORD_TOKEN`).
-5.  (Optional but recommended) Under **"Privileged Gateway Intents"**, enable **"Server Members Intent"** and **"Message Content Intent"**.
-
-### 2. Get your Guild ID (Server ID)
-1.  Open your Discord client.
-2.  Go to **User Settings** (the gear icon at the bottom left).
-3.  Go to **Advanced** (under App Settings).
-4.  Enable **Developer Mode**.
-5.  Now, **right-click** on your server icon/name in the server list on the left.
-6.  Click **"Copy Server ID"**. Save this for your `.env` file (`GUILD_ID`).
-
-### 3. Invite the Bot
-1.  Go to the **"OAuth2"** tab, then **"URL Generator"**.
-2.  Select the following scopes:
-    - `bot`
-    - `applications.commands` (Crucial for Slash Commands)
-3.  Select the following permissions:
-    - `Send Messages`
-    - `Use Slash Commands`
-    - `Read Message History`
-4.  **Copy the generated URL** and paste it into your browser to invite the bot to your server.
+- **Feature:** Implemented a new **Secure Web Control Panel** (accessible on port 8083 by default).
+- **Feature:** Added **Encrypted JSON Configuration** (`config.json`).
+- **Feature:** Added **SSH Connectivity Tester** in the WebUI.
+- **Feature:** Added **Live Application Log Streaming** to the dashboard.
+- **Security:** Added encryption for Discord tokens and all SSH credentials.
+- **Security:** Implemented `hmac.compare_digest` for login and session rotation.
+- **Security:** Masked all secrets in the WebUI to prevent exposure.
+- **Fix:** Resolved template loading issues in Docker environments.
+- **Fix:** Optimized memory usage for log buffering.
 
 ---
 
 ## 📦 Setup & Deployment
 
 ### 1. Requirements
-- A Discord Bot Token & Guild ID (from the steps above).
+- A Discord Bot Token & Guild ID.
 - Docker and Docker Compose installed.
 - Remote Ubuntu servers with SSH access.
 
 ### 2. Configuration
-Clone the repository and copy the `.env.example` file to `.env`:
-```bash
-cp .env.example .env
-```
-Edit the `.env` file with your configuration. Servers are defined using a numbered format (`_1`, `_2`, ...):
+The bot now uses a hybrid configuration system. Initial secrets are set via environment variables, and the rest is managed via `config.json`.
 
-- `DISCORD_TOKEN`: Your bot token.
-- `GUILD_ID`: Your Discord Server ID for command syncing.
-- `ENABLE_DOCKER`: Set to `true` to enable the `/docker` command group.
-- `POWER_CONTROL_ENABLED`: Set to `true` to enable `/server power` (reboot/shutdown).
-- `POWER_CONTROL_PASSWORD`: A safety password required to confirm power actions.
-- `ALLOWED_ROLES`: Comma-separated list of Discord role names allowed to use administrative commands (e.g., `Admin,DevOps`).
-- `KNOWN_HOSTS_FILE`: Path to the SSH `known_hosts` file inside the container (default: `/app/.ssh/known_hosts`).
-- `DISCORD_UBUNTU_SERVER_ALIAS_N`: The nickname for server N.
-- `DISCORD_UBUNTU_SERVER_IP_N`: Hostname or IP.
-- `DISCORD_UBUNTU_SERVER_AUTH_METHOD_N`: `key` or `password`.
-- `DISCORD_UBUNTU_SERVER_KEY_N`: Raw SSH Key string OR path to key file (see below).
-- `DISCORD_UBUNTU_SERVER_PASSWORD_N`: Server password (if method is password).
+**Mandatory Environment Variables (`.env`):**
+- `SECRET_KEY`: A 32+ character random string used to encrypt all local secrets. **Do not lose this.**
+- `WEBUI_ENABLED`: Set to `true` to enable the dashboard.
 
-### 3. SSH Key Management
-DiscoBunty supports two ways to handle SSH keys:
+**WebUI Access:**
+Once the container is running, navigate to `http://<your-ip>:8083` to configure your bot token and servers.
 
-#### A. Volume Bind Mount (Recommended)
-Place your `.key` files in a local folder named `./ssh_keys` and mount it in `docker-compose.yml`. Then point the variable to the path inside the container:
-```bash
-DISCORD_UBUNTU_SERVER_KEY_1=/app/ssh_keys/ServerName.key
-```
-
-#### B. Raw Environment Variable
-Paste the entire content of your private key directly into the `.env` file (ensure you handle newlines correctly):
-```bash
-DISCORD_UBUNTU_SERVER_KEY_1="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
-```
-
-### 4. Run with Docker
+### 3. Run with Docker
 ```bash
 docker-compose up -d
 ```
@@ -144,4 +102,3 @@ botuser ALL=(ALL) NOPASSWD: /usr/sbin/reboot, /usr/sbin/shutdown
 
 ## 📜 License
 MIT License. Feel free to use and contribute!
-
