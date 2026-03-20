@@ -21,6 +21,7 @@ from collections import deque
 
 # Configure logging with an in-memory buffer for the WebUI
 log_buffer = deque(maxlen=500)
+log_buffer.append(f"System Initialized. Log capture started.")
 
 class WebUIHandler(logging.Handler):
     def emit(self, record):
@@ -292,6 +293,11 @@ async def login(request: Request, password: str = Form(...)):
         request.session["authenticated"] = True
         return RedirectResponse(url="/", status_code=303)
     return RedirectResponse(url="/login?error=1", status_code=303)
+
+@app.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/login")
 
 @app.post("/api/test-server")
 async def test_server(request: Request, server_data: dict):
