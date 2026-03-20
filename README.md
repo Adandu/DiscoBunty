@@ -38,6 +38,12 @@ Whoever wants to use this bot, they do so at their own risk. The authors and cre
 
 ---
 
+## 🚀 Recent Release Notes (v0.7.2)
+
+- **Branding:** Added `logo.svg` as the site favicon for all WebUI pages.
+- **Fix:** Corrected Material Symbols rendering by updating font URLs and ensuring CSP allows connections to Google Fonts.
+- **Security:** Further hardened `Content-Security-Policy` to specifically allow font and icon CDNs.
+
 ## 🚀 Recent Release Notes (v0.7.1)
 
 - **Fix:** Corrected `Content-Security-Policy` (CSP) headers in `main.py` to allow trusted CDNs (Tailwind CSS, Google Fonts). This resolves the issue where the WebUI would render without styles on some browsers.

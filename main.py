@@ -335,7 +335,7 @@ async def add_security_headers(request: Request, call_next):
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "img-src 'self' data: https://lh3.googleusercontent.com; "
         "font-src 'self' https://fonts.gstatic.com; "
-        "connect-src 'self'; "
+        "connect-src 'self' https://fonts.googleapis.com; "
         "frame-ancestors 'none';"
     )
     return response
@@ -343,6 +343,9 @@ async def add_security_headers(request: Request, call_next):
 # Use absolute path for templates to ensure they are found in all environments (Docker vs Local)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+
+# Mount the root directory as static to serve the logo/favicon
+app.mount("/static", StaticFiles(directory=BASE_DIR), name="static")
 
 def is_authenticated(request: Request):
     web_pass = config["webui"].get("password")
