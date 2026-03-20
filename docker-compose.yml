@@ -11,13 +11,15 @@ services:
         limits:
           memory: 256M
           cpus: "0.5"
+    ports:
+      - "8000:8000"
     volumes:
       - ./ssh_keys:/app/ssh_keys:ro
       - ./.ssh:/app/.ssh:ro
+      - ./config.json:/app/config.json
     env_file:
       - .env
     environment:
-      - ENABLE_DOCKER=${ENABLE_DOCKER:-false}
       - PYTHONUNBUFFERED=1
     networks:
       - discobunty-net
