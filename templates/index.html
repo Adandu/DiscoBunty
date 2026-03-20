@@ -1,583 +1,750 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark" lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>DiscoBunty Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-tertiary-fixed-variant": "#743500",
+                        "surface-variant": "#33353a",
+                        "on-primary-fixed": "#000569",
+                        "on-secondary-fixed": "#3a0b00",
+                        "error": "#ffb4ab",
+                        "tertiary": "#ffb689",
+                        "tertiary-fixed": "#ffdbc8",
+                        "on-surface": "#e2e2e8",
+                        "error-container": "#93000a",
+                        "surface-tint": "#bec2ff",
+                        "inverse-on-surface": "#2e3035",
+                        "tertiary-container": "#bb5a00",
+                        "on-primary-container": "#fffdff",
+                        "on-error": "#690005",
+                        "outline": "#8f8fa0",
+                        "surface-dim": "#111318",
+                        "primary-fixed": "#e0e0ff",
+                        "primary-fixed-dim": "#bec2ff",
+                        "surface-container-low": "#191c20",
+                        "primary-container": "#5865f2",
+                        "secondary-fixed": "#ffdbd0",
+                        "primary": "#bec2ff",
+                        "on-tertiary": "#512300",
+                        "surface-container-lowest": "#0c0e13",
+                        "background": "#111318",
+                        "outline-variant": "#454655",
+                        "on-primary-fixed-variant": "#222fc2",
+                        "secondary-fixed-dim": "#ffb59e",
+                        "surface-bright": "#37393e",
+                        "secondary": "#ffb59e",
+                        "inverse-surface": "#e2e2e8",
+                        "surface-container": "#1d2024",
+                        "on-tertiary-fixed": "#311300",
+                        "secondary-container": "#c33900",
+                        "surface-container-highest": "#33353a",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-container": "#ffe7e0",
+                        "tertiary-fixed-dim": "#ffb689",
+                        "on-primary": "#000da4",
+                        "on-surface-variant": "#c6c5d7",
+                        "on-secondary": "#5e1700",
+                        "on-tertiary-container": "#fffdff",
+                        "surface-container-high": "#282a2f",
+                        "surface": "#111318",
+                        "on-background": "#e2e2e8",
+                        "inverse-primary": "#3f4cda",
+                        "on-secondary-fixed-variant": "#852400"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
     <style>
-        :root {
-            --discord-blurple: #5865F2;
-            --ubuntu-orange: #E95420;
-            --ubuntu-dark: #300a24;
-            --bg-dark: #1e1e1e;
-            --card-bg: #2b2d31;
-            --input-bg: #1e1f22;
-            --text-primary: #ffffff;
-            --text-secondary: #b5bac1;
-            --success: #23a559;
-            --danger: #da373c;
-            --radius: 8px;
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
         }
-
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: var(--ubuntu-dark);
-            background-image: linear-gradient(135deg, var(--ubuntu-dark) 0%, #1e1e1e 100%);
-            color: var(--text-primary);
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-        }
-
-        header {
-            width: 100%;
-            padding: 15px 0;
-            background: rgba(0,0,0,0.3);
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            margin-bottom: 30px;
-        }
-
-        header h1 {
-            margin: 0;
-            font-weight: 500;
-            letter-spacing: 1px;
-            color: var(--ubuntu-orange);
-            font-size: 1.5rem;
-        }
-
-        .logout-btn {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.9rem;
-            padding: 8px 15px;
-            border-radius: 4px;
-            background: rgba(255,255,255,0.05);
-            transition: background 0.2s;
-        }
-
-        .logout-btn:hover {
-            background: var(--danger);
-            color: white;
-        }
-
-        .container {
-            width: 90%;
-            max-width: 1200px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 40px;
-        }
-
-        .card {
-            background-color: var(--card-bg);
-            border-radius: var(--radius);
-            padding: 24px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-        }
-
-        .full-width {
-            grid-column: 1 / -1;
-        }
-
-        h2 {
-            margin-top: 0;
-            font-size: 1.2rem;
-            color: var(--discord-blurple);
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 5px;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-        }
-
-        input[type="text"], 
-        input[type="number"],
-        input[type="password"],
-        select,
-        textarea {
-            width: 100%;
-            padding: 10px;
-            background-color: var(--input-bg);
-            border: 1px solid transparent;
-            border-radius: 4px;
-            color: white;
-            box-sizing: border-box;
-            transition: border 0.2s;
-        }
-
-        input:focus, select:focus {
-            outline: none;
-            border: 1px solid var(--discord-blurple);
-        }
-
-        .switch-container {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 4px;
-            margin-bottom: 10px;
-        }
-
-        .switch {
-          position: relative;
-          display: inline-block;
-          width: 50px;
-          height: 24px;
-        }
-
-        .switch input { 
-          opacity: 0;
-          width: 0;
-          height: 0;
-        }
-
-        .slider {
-          position: absolute;
-          cursor: pointer;
-          top: 0; left: 0; right: 0; bottom: 0;
-          background-color: #4e5058;
-          transition: .4s;
-          border-radius: 24px;
-        }
-
-        .slider:before {
-          position: absolute;
-          content: "";
-          height: 18px; width: 18px; left: 3px; bottom: 3px;
-          background-color: white;
-          transition: .4s;
-          border-radius: 50%;
-        }
-
-        input:checked + .slider { background-color: var(--success); }
-        input:checked + .slider:before { transform: translateX(26px); }
-
-        button {
-            cursor: pointer;
-            padding: 10px 20px;
-            border-radius: 4px;
-            border: none;
-            font-weight: 500;
-            transition: opacity 0.2s;
-        }
-
-        .btn-primary { background-color: var(--discord-blurple); color: white; }
-        .btn-success { background-color: var(--success); color: white; }
-        .btn-danger { background-color: var(--danger); color: white; }
-        .btn-secondary { background-color: #4e5058; color: white; }
-        button:hover { opacity: 0.9; }
-
-        .server-item {
-            background: rgba(255,255,255,0.05);
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-            border-left: 4px solid var(--ubuntu-orange);
-            position: relative;
-        }
-
-        .server-actions {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            display: flex;
-            gap: 10px;
-        }
-
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #33353a; border-radius: 10px; }
+        /* Terminal log styling */
         #logs-container {
-            background-color: #000;
-            color: #0f0;
+            background-color: #0c0e13;
+            color: #4ade80;
             font-family: 'Courier New', Courier, monospace;
-            padding: 15px;
-            border-radius: 4px;
-            height: 400px;
-            overflow-y: auto;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             white-space: pre-wrap;
-            margin-top: 20px;
+            word-break: break-all;
         }
-
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0; top: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.8);
+        /* Nav active state */
+        .nav-active {
+            background-color: #33353a;
+            color: #bec2ff;
+            font-weight: 700;
         }
-
-        .modal-content {
-            background-color: var(--card-bg);
-            margin: 5% auto;
-            padding: 30px;
-            border-radius: var(--radius);
-            width: 80%;
-            max-width: 600px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        /* Toggle switch (Neon Architect) */
+        .na-toggle { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+        .na-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+        .na-track {
+            width: 44px; height: 24px; background: #33353a; border-radius: 999px;
+            transition: background 0.2s; position: relative; display: block;
         }
-
-        @media (max-width: 992px) {
-            .container { grid-template-columns: 1fr; }
+        .na-thumb {
+            position: absolute; top: 3px; left: 3px;
+            width: 18px; height: 18px; border-radius: 50%;
+            background: #c6c5d7; transition: transform 0.2s, background 0.2s;
         }
+        .na-toggle input:checked ~ .na-track { background: #5865f2; }
+        .na-toggle input:checked ~ .na-track .na-thumb { transform: translateX(20px); background: #fff; }
+        /* Modal backdrop */
+        .modal-open { overflow: hidden; }
     </style>
 </head>
-<body>
-    <header>
-        <div style="width: 50px;"></div> <!-- Spacer -->
-        <h1>DiscoBunty Control Panel</h1>
-        <form method="post" action="/logout" style="display:inline;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button type="submit" class="logout-btn" style="background:none; border:none; cursor:pointer;">Logout</button>
-        </form>
-    </header>
+<body class="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary-container overflow-hidden">
 
-    <div class="container">
-        <!-- Core Configuration -->
-        <div class="card">
-            <h2>Core Settings</h2>
-            <form id="coreForm">
-                <div class="form-group">
-                    <label>Discord Token</label>
-                    <input type="password" id="DISCORD_TOKEN" value="{{ config.discord.token or '' }}">
-                </div>
-                <div class="form-group">
-                    <label>Guild ID (Optional)</label>
-                    <input type="text" id="GUILD_ID" value="{{ config.discord.guild_id or '' }}">
-                </div>
-                <div class="form-group">
-                    <label>Allowed Roles (Comma separated)</label>
-                    <input type="text" id="ALLOWED_ROLES" value="{{ config.discord.allowed_roles or '' }}">
-                </div>
-                
-                <div class="switch-container">
-                    <span>Enable Docker Integration</span>
-                    <label class="switch">
-                        <input type="checkbox" id="ENABLE_DOCKER" {{ 'checked' if config.features.enable_docker == 'true' }}>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="switch-container">
-                    <span>Enable Power Control</span>
-                    <label class="switch">
-                        <input type="checkbox" id="POWER_CONTROL_ENABLED" {{ 'checked' if config.features.power_control_enabled == 'true' }}>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="form-group">
-                    <label>Power Control Password</label>
-                    <input type="password" id="POWER_CONTROL_PASSWORD" value="{{ config.features.power_control_password or '' }}">
-                </div>
-
-                <div class="form-group">
-                    <label>WebUI Password</label>
-                    <input type="password" id="WEB_PASSWORD" value="{{ config.webui.password or '' }}">
-                </div>
-
-                <button type="button" onclick="saveCoreConfig()" class="btn-primary" style="width: 100%;">Save Core Settings</button>
-            </form>
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-surface-container-low flex flex-col p-4 z-50">
+    <div class="mb-8 px-2 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary-container to-primary flex items-center justify-center text-on-primary font-bold shadow-lg">
+            <span class="material-symbols-outlined text-xl">hub</span>
         </div>
-
-        <!-- Server Management -->
-        <div class="card">
-            <h2>
-                Servers
-                <button onclick="openServerModal()" class="btn-success" style="padding: 5px 15px; font-size: 0.8rem;">+ Add Server</button>
-            </h2>
-            <div id="serverList"></div>
-        </div>
-
-        <!-- Application Logs Section -->
-        <div class="card full-width">
-            <h2>
-                Application Logs
-                <div style="font-size: 0.8rem; font-weight: normal; color: var(--text-secondary);">
-                    Auto-refreshing every 5 seconds
-                </div>
-            </h2>
-            <div id="logs-container">Loading application logs...</div>
+        <div>
+            <h1 class="text-xl font-bold text-primary leading-none" style="font-family:'Manrope',sans-serif;">DiscoBunty</h1>
+            <p class="text-[10px] text-secondary uppercase tracking-widest mt-1 opacity-70">Control Panel</p>
         </div>
     </div>
 
-    <!-- Server Modal -->
-    <div id="serverModal" class="modal">
-        <div class="modal-content">
-            <h2 id="modalTitle">Add Server</h2>
-            <form id="serverForm">
-                <input type="hidden" id="serverIndex" value="-1">
-                <div class="form-group">
-                    <label>Alias (Friendly Name)</label>
-                    <input type="text" id="srvAlias" required>
+    <nav class="flex-1 space-y-1">
+        <a href="#settings" class="nav-link flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest hover:scale-[1.01] transition-all rounded-xl" data-section="settings">
+            <span class="material-symbols-outlined">settings</span>
+            <span class="text-sm font-medium">Core Settings</span>
+        </a>
+        <a href="#discord" class="nav-link flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest hover:scale-[1.01] transition-all rounded-xl" data-section="discord">
+            <span class="material-symbols-outlined">tag</span>
+            <span class="text-sm font-medium">Discord</span>
+        </a>
+        <a href="#features" class="nav-link flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest hover:scale-[1.01] transition-all rounded-xl" data-section="features">
+            <span class="material-symbols-outlined">widgets</span>
+            <span class="text-sm font-medium">Features</span>
+        </a>
+        <a href="#servers" class="nav-link flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest hover:scale-[1.01] transition-all rounded-xl" data-section="servers">
+            <span class="material-symbols-outlined">dns</span>
+            <span class="text-sm font-medium">Servers</span>
+        </a>
+        <a href="#logs" class="nav-link flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-highest hover:scale-[1.01] transition-all rounded-xl" data-section="logs">
+            <span class="material-symbols-outlined">terminal</span>
+            <span class="text-sm font-medium">Logs</span>
+        </a>
+    </nav>
+
+    <div class="mt-auto pt-4">
+        <form method="post" action="/logout">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="w-full py-3 rounded-xl bg-surface-container-highest text-on-surface-variant font-semibold flex items-center justify-center gap-2 hover:bg-error-container hover:text-error transition-all active:scale-95 text-sm">
+                <span class="material-symbols-outlined text-base">logout</span>
+                <span>Logout</span>
+            </button>
+        </form>
+    </div>
+</aside>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<header class="fixed top-0 right-0 left-64 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_12px_32px_rgba(88,101,242,0.12)]">
+    <div class="flex items-center gap-4">
+        <h2 class="text-base font-black tracking-tight text-on-surface uppercase" style="font-family:'Manrope',sans-serif;">Bot Dashboard</h2>
+        <div class="h-4 w-px bg-outline-variant opacity-30"></div>
+        <span id="saveStatus" class="text-xs text-on-surface-variant font-medium opacity-0 transition-opacity duration-300">Saved</span>
+    </div>
+    <div class="flex items-center gap-3">
+        <button onclick="saveFullConfig()" class="px-6 py-2 bg-gradient-to-br from-primary-container to-primary text-on-primary text-sm font-bold rounded-full hover:scale-105 active:scale-95 transition-all shadow-[0_4px_16px_rgba(88,101,242,0.3)]">
+            Save Changes
+        </button>
+    </div>
+</header>
+
+<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+<main class="ml-64 pt-16 h-screen overflow-y-auto bg-surface">
+<div class="p-10 max-w-7xl mx-auto space-y-10">
+
+    <!-- ── Bot Status Hero ── -->
+    <section id="overview" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-8 bg-surface-container-low rounded-3xl p-8 flex items-center gap-6 relative overflow-hidden group">
+            <div class="absolute -right-20 -top-20 w-64 h-64 bg-primary-container/10 blur-[100px] rounded-full group-hover:bg-primary-container/20 transition-all duration-700 pointer-events-none"></div>
+            <div class="relative flex-shrink-0">
+                <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-container to-primary flex items-center justify-center shadow-[0_8px_24px_rgba(88,101,242,0.3)]">
+                    <span class="material-symbols-outlined text-4xl text-on-primary">smart_toy</span>
                 </div>
-                <div class="form-group">
-                    <label>Hostname / IP</label>
-                    <input type="text" id="srvHost" required>
+                <div class="absolute -bottom-1 -right-1 w-5 h-5 bg-[#23a55a] border-2 border-surface-container-low rounded-full animate-pulse"></div>
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-3 mb-1 flex-wrap">
+                    <h2 class="text-3xl font-extrabold tracking-tight text-on-surface" style="font-family:'Manrope',sans-serif;">DiscoBunty</h2>
+                    <span class="bg-primary-container/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-tighter">Active</span>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group">
-                        <label>User</label>
-                        <input type="text" id="srvUser" value="root">
+                <p class="text-on-surface-variant text-sm leading-relaxed max-w-md">Multi-server Discord management bot with Docker integration, SSH control, and automated workflows.</p>
+                <div class="flex gap-6 mt-4">
+                    <div class="flex flex-col">
+                        <span class="text-[10px] uppercase font-bold text-primary tracking-widest">Servers</span>
+                        <span class="text-xl font-bold" id="serverCountDisplay" style="font-family:'Manrope',sans-serif;">0</span>
                     </div>
-                    <div class="form-group">
-                        <label>Port</label>
-                        <input type="number" id="srvPort" value="22">
+                    <div class="flex flex-col">
+                        <span class="text-[10px] uppercase font-bold text-secondary tracking-widest">Status</span>
+                        <span class="text-xl font-bold text-[#4ade80]" style="font-family:'Manrope',sans-serif;">Online</span>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label>Authentication Method</label>
-                    <select id="srvAuth" onchange="toggleAuthFields()">
+            </div>
+        </div>
+        <div class="lg:col-span-4 bg-surface-container-high rounded-3xl p-8 flex flex-col justify-between" style="border-bottom: 4px solid #c33900;">
+            <h3 class="text-base font-bold mb-4" style="font-family:'Manrope',sans-serif;">Quick Actions</h3>
+            <div class="space-y-3 flex-1">
+                <button onclick="document.getElementById('settings').scrollIntoView({behavior:'smooth'})" class="w-full py-2.5 px-4 bg-surface-container-highest rounded-xl text-on-surface text-sm font-medium text-left flex items-center gap-3 hover:bg-surface-bright transition-colors">
+                    <span class="material-symbols-outlined text-primary text-base">tune</span>
+                    Configure Settings
+                </button>
+                <button onclick="openServerModal()" class="w-full py-2.5 px-4 bg-surface-container-highest rounded-xl text-on-surface text-sm font-medium text-left flex items-center gap-3 hover:bg-surface-bright transition-colors">
+                    <span class="material-symbols-outlined text-secondary text-base">add_circle</span>
+                    Add Server
+                </button>
+                <button onclick="document.getElementById('logs').scrollIntoView({behavior:'smooth'})" class="w-full py-2.5 px-4 bg-surface-container-highest rounded-xl text-on-surface text-sm font-medium text-left flex items-center gap-3 hover:bg-surface-bright transition-colors">
+                    <span class="material-symbols-outlined text-outline text-base">receipt_long</span>
+                    View Logs
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── Core Configuration ── -->
+    <section id="settings" class="bg-surface-container-low rounded-3xl p-10">
+        <div class="mb-8 flex items-baseline justify-between">
+            <div>
+                <h2 class="text-2xl font-black tracking-tight mb-1" style="font-family:'Manrope',sans-serif;">Core Configuration</h2>
+                <p class="text-on-surface-variant text-sm">Manage bot credentials and environment parameters</p>
+            </div>
+            <button onclick="saveCoreConfig()" class="px-5 py-2 bg-gradient-to-br from-primary-container to-primary text-on-primary text-sm font-bold rounded-full hover:scale-105 active:scale-95 transition-all">
+                Save Core
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+
+            <!-- Discord Settings -->
+            <div id="discord" class="space-y-6">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined text-primary text-base">tag</span>
+                    <span class="text-xs font-bold text-primary uppercase tracking-widest">Discord</span>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Bot Token</label>
+                    <input type="password" id="DISCORD_TOKEN" value="{{ config.discord.token or '' }}"
+                        class="w-full bg-surface-container-lowest border-none rounded-xl py-3 px-5 text-on-surface font-mono text-sm focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none"
+                        placeholder="Discord Bot Token">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Guild ID <span class="normal-case text-outline font-normal">(optional)</span></label>
+                    <input type="text" id="GUILD_ID" value="{{ config.discord.guild_id or '' }}"
+                        class="w-full bg-surface-container-lowest border-none rounded-xl py-3 px-5 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none"
+                        placeholder="Server / Guild ID">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Allowed Roles <span class="normal-case text-outline font-normal">(comma-separated)</span></label>
+                    <input type="text" id="ALLOWED_ROLES" value="{{ config.discord.allowed_roles or '' }}"
+                        class="w-full bg-surface-container-lowest border-none rounded-xl py-3 px-5 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none"
+                        placeholder="admin, moderator">
+                </div>
+            </div>
+
+            <!-- WebUI + Features -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="material-symbols-outlined text-secondary text-base">web</span>
+                    <span class="text-xs font-bold text-secondary uppercase tracking-widest">WebUI</span>
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">WebUI Password</label>
+                    <input type="password" id="WEB_PASSWORD" value="{{ config.webui.password or '' }}"
+                        class="w-full bg-surface-container-lowest border-none rounded-xl py-3 px-5 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none"
+                        placeholder="WebUI login password">
+                </div>
+
+                <div id="features" class="flex items-center gap-2 mb-2 pt-2">
+                    <span class="material-symbols-outlined text-tertiary text-base">widgets</span>
+                    <span class="text-xs font-bold text-tertiary uppercase tracking-widest">Features</span>
+                </div>
+
+                <!-- Docker Integration Toggle -->
+                <div class="bg-surface-container-high p-5 rounded-2xl flex items-center justify-between group hover:bg-surface-container-highest transition-colors">
+                    <div class="flex items-center gap-4">
+                        <div class="p-2.5 bg-primary-container/10 text-primary rounded-xl group-hover:bg-primary-container group-hover:text-on-primary transition-colors">
+                            <span class="material-symbols-outlined text-sm">deployed_code</span>
+                        </div>
+                        <div>
+                            <h5 class="font-bold text-sm">Docker Integration</h5>
+                            <p class="text-xs text-on-surface-variant mt-0.5">Enable Docker commands via SSH</p>
+                        </div>
+                    </div>
+                    <label class="na-toggle">
+                        <input type="checkbox" id="ENABLE_DOCKER" {{ 'checked' if config.features.enable_docker == 'true' }}>
+                        <span class="na-track"><span class="na-thumb"></span></span>
+                    </label>
+                </div>
+
+                <!-- Power Control Toggle -->
+                <div class="bg-surface-container-high p-5 rounded-2xl flex items-center justify-between group hover:bg-surface-container-highest transition-colors">
+                    <div class="flex items-center gap-4">
+                        <div class="p-2.5 bg-secondary-container/10 text-secondary rounded-xl group-hover:bg-secondary-container group-hover:text-on-secondary-container transition-colors">
+                            <span class="material-symbols-outlined text-sm">power_settings_new</span>
+                        </div>
+                        <div>
+                            <h5 class="font-bold text-sm">Power Control</h5>
+                            <p class="text-xs text-on-surface-variant mt-0.5">Enable server power management</p>
+                        </div>
+                    </div>
+                    <label class="na-toggle">
+                        <input type="checkbox" id="POWER_CONTROL_ENABLED" {{ 'checked' if config.features.power_control_enabled == 'true' }}>
+                        <span class="na-track"><span class="na-thumb"></span></span>
+                    </label>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Power Control Password</label>
+                    <input type="password" id="POWER_CONTROL_PASSWORD" value="{{ config.features.power_control_password or '' }}"
+                        class="w-full bg-surface-container-lowest border-none rounded-xl py-3 px-5 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none"
+                        placeholder="Power control passphrase">
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ── Server Management ── -->
+    <section id="servers" class="space-y-6">
+        <div class="flex items-baseline justify-between">
+            <div>
+                <h2 class="text-2xl font-black tracking-tight" style="font-family:'Manrope',sans-serif;">SSH Servers</h2>
+                <p class="text-on-surface-variant text-sm mt-1">Managed remote hosts for Docker &amp; power commands</p>
+            </div>
+            <button onclick="openServerModal()" class="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-br from-primary-container to-primary text-on-primary text-sm font-bold rounded-full hover:scale-105 active:scale-95 transition-all shadow-[0_4px_16px_rgba(88,101,242,0.25)]">
+                <span class="material-symbols-outlined text-base">add</span>
+                Add Server
+            </button>
+        </div>
+        <div id="serverList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </section>
+
+    <!-- ── Application Logs ── -->
+    <section id="logs" class="bg-surface-container-low rounded-3xl p-8">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="text-2xl font-black tracking-tight" style="font-family:'Manrope',sans-serif;">Application Logs</h2>
+                <p class="text-on-surface-variant text-sm mt-1">Live output · auto-refreshes every 5 seconds</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-[#4ade80] animate-pulse inline-block"></span>
+                <span class="text-xs text-on-surface-variant font-medium">Live</span>
+            </div>
+        </div>
+        <div id="logs-container" class="rounded-2xl p-5 h-96 overflow-y-auto leading-relaxed">Loading application logs...</div>
+    </section>
+
+</div>
+
+<!-- Footer -->
+<footer class="p-10 text-center text-outline text-xs font-label uppercase tracking-widest opacity-40">
+    DiscoBunty Core • Neon Architect UI
+</footer>
+</main>
+
+<!-- ═══════════════ SERVER MODAL ═══════════════ -->
+<div id="serverModal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+    <!-- Backdrop -->
+    <div onclick="closeServerModal()" class="absolute inset-0 bg-surface-container-lowest/80 backdrop-blur-sm"></div>
+    <!-- Panel -->
+    <div class="relative bg-surface-container-high rounded-3xl p-8 w-full max-w-lg mx-4 shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
+        <div class="flex items-center justify-between mb-6">
+            <h3 id="modalTitle" class="text-xl font-bold" style="font-family:'Manrope',sans-serif;">Add Server</h3>
+            <button onclick="closeServerModal()" class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-xl transition-colors">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <form id="serverForm" class="space-y-4">
+            <input type="hidden" id="serverIndex" value="-1">
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Alias</label>
+                    <input type="text" id="srvAlias" required
+                        class="w-full bg-surface-container-lowest border-none rounded-xl py-3 px-4 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none"
+                        placeholder="my-server">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Hostname / IP</label>
+                    <input type="text" id="srvHost" required
+                        class="w-full bg-surface-container-lowest border-none rounded-xl py-3 px-4 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none"
+                        placeholder="192.168.1.100">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">User</label>
+                    <input type="text" id="srvUser" value="root"
+                        class="w-full bg-surface-container-lowest border-none rounded-xl py-3 px-4 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Port</label>
+                    <input type="number" id="srvPort" value="22"
+                        class="w-full bg-surface-container-lowest border-none rounded-xl py-3 px-4 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Auth Method</label>
+                <div class="relative">
+                    <select id="srvAuth" onchange="toggleAuthFields()"
+                        class="w-full appearance-none bg-surface-container-lowest border-none rounded-xl py-3 px-4 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none cursor-pointer">
                         <option value="key">SSH Key</option>
                         <option value="password">Password</option>
                     </select>
+                    <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
                 </div>
-                <div id="passwordField" class="form-group" style="display: none;">
-                    <label>Password</label>
-                    <input type="password" id="srvPassword">
-                </div>
-                <div id="keyField" class="form-group">
-                    <label>SSH Key (Paste content or path)</label>
-                    <textarea id="srvKey" rows="5"></textarea>
-                </div>
+            </div>
 
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button type="button" onclick="testServerConnection()" class="btn-secondary" style="flex: 1;">Test Connection</button>
-                    <button type="submit" class="btn-success" style="flex: 1;">Save Server</button>
-                    <button type="button" onclick="closeServerModal()" class="btn-danger">Cancel</button>
-                </div>
-                <div id="modalStatus" class="status-msg" style="display:none; padding:10px; border-radius:4px; margin-top:10px;"></div>
-            </form>
-        </div>
+            <div id="passwordField" class="hidden">
+                <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">Password</label>
+                <input type="password" id="srvPassword"
+                    class="w-full bg-surface-container-lowest border-none rounded-xl py-3 px-4 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none">
+            </div>
+
+            <div id="keyField">
+                <label class="block text-xs font-bold text-on-surface-variant mb-2 uppercase tracking-wider">SSH Key <span class="normal-case text-outline font-normal">(paste content or path)</span></label>
+                <textarea id="srvKey" rows="4"
+                    class="w-full bg-surface-container-lowest border-none rounded-xl py-3 px-4 text-on-surface font-mono text-xs focus:ring-2 focus:ring-primary focus:bg-surface-container-high transition-all outline-none resize-none"
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+            </div>
+
+            <div id="modalStatus" class="hidden rounded-xl px-4 py-3 text-sm font-medium"></div>
+
+            <div class="flex gap-3 pt-2">
+                <button type="button" onclick="testServerConnection()"
+                    class="flex-1 py-3 bg-surface-container-highest text-on-surface text-sm font-bold rounded-xl hover:bg-surface-bright transition-colors flex items-center justify-center gap-2">
+                    <span class="material-symbols-outlined text-base">wifi_tethering</span>
+                    Test
+                </button>
+                <button type="submit"
+                    class="flex-1 py-3 bg-gradient-to-br from-primary-container to-primary text-on-primary text-sm font-bold rounded-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+                    <span class="material-symbols-outlined text-base">save</span>
+                    Save Server
+                </button>
+                <button type="button" onclick="closeServerModal()"
+                    class="py-3 px-4 bg-error-container/20 text-error text-sm font-bold rounded-xl hover:bg-error-container/40 transition-colors">
+                    <span class="material-symbols-outlined text-base">close</span>
+                </button>
+            </div>
+        </form>
     </div>
+</div>
 
-    <script>
-        let servers = {{ servers | tojson }};
-        const config = {{ config | tojson }};
-        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+<!-- ═══════════════ JAVASCRIPT ═══════════════ -->
+<script>
+    let servers = {{ servers | tojson }};
+    const config = {{ config | tojson }};
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-        function escapeHtml(str) {
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
+    /* ── Utils ── */
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
 
-        function renderServers() {
-            const list = document.getElementById('serverList');
-            list.innerHTML = '';
+    function showSaveStatus(msg, isError) {
+        const el = document.getElementById('saveStatus');
+        el.textContent = msg;
+        el.style.color = isError ? '#ffb4ab' : '#4ade80';
+        el.style.opacity = '1';
+        setTimeout(() => { el.style.opacity = '0'; }, 2500);
+    }
 
-            if (servers.length === 0) {
-                list.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">No servers configured.</p>';
-            }
+    /* ── Server List Rendering ── */
+    function renderServers() {
+        const list = document.getElementById('serverList');
+        const countEl = document.getElementById('serverCountDisplay');
+        list.innerHTML = '';
+        if (countEl) countEl.textContent = servers.length;
 
-            servers.forEach((s, index) => {
-                const item = document.createElement('div');
-                item.className = 'server-item';
-                item.innerHTML = `
-                    <strong>${escapeHtml(s.alias)}</strong> (${escapeHtml(s.host)})
-                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 5px;">
-                        User: ${escapeHtml(s.user)} | Port: ${escapeHtml(s.port)} | Auth: ${escapeHtml(s.auth_method)}
+        if (servers.length === 0) {
+            list.innerHTML = `
+                <div class="col-span-full bg-surface-container-low rounded-3xl p-12 flex flex-col items-center justify-center text-center border-2 border-dashed border-outline-variant/20">
+                    <div class="w-14 h-14 rounded-full bg-surface-container-highest flex items-center justify-center text-outline mb-4">
+                        <span class="material-symbols-outlined text-3xl">dns</span>
                     </div>
-                    <div class="server-actions">
-                        <button onclick="editServer(${index})" class="btn-primary" style="padding: 5px 10px; font-size: 0.7rem;">Edit</button>
-                        <button onclick="deleteServer(${index})" class="btn-danger" style="padding: 5px 10px; font-size: 0.7rem;">Delete</button>
+                    <p class="text-on-surface-variant text-sm font-medium">No servers configured.</p>
+                    <p class="text-outline text-xs mt-1">Click "Add Server" to get started.</p>
+                </div>`;
+            return;
+        }
+
+        servers.forEach((s, index) => {
+            const item = document.createElement('div');
+            item.className = 'bg-surface-container-low p-6 rounded-3xl hover:scale-[1.01] hover:bg-surface-container-high transition-all group flex flex-col gap-4 relative overflow-hidden';
+            item.innerHTML = `
+                <div class="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary-container to-primary rounded-l-3xl opacity-60"></div>
+                <div class="pl-2">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <h4 class="font-bold text-on-surface text-base leading-tight" style="font-family:'Manrope',sans-serif;">${escapeHtml(s.alias)}</h4>
+                            <p class="text-sm text-on-surface-variant mt-0.5 font-mono">${escapeHtml(s.host)}</p>
+                        </div>
+                        <div class="flex gap-1.5 flex-shrink-0">
+                            <button onclick="editServer(${index})"
+                                class="p-2 bg-surface-container-highest rounded-xl text-primary hover:bg-primary-container hover:text-on-primary transition-all" title="Edit">
+                                <span class="material-symbols-outlined text-sm">edit</span>
+                            </button>
+                            <button onclick="deleteServer(${index})"
+                                class="p-2 bg-surface-container-highest rounded-xl text-on-surface-variant hover:bg-error-container/40 hover:text-error transition-all" title="Delete">
+                                <span class="material-symbols-outlined text-sm">delete</span>
+                            </button>
+                        </div>
                     </div>
-                `;
-                list.appendChild(item);
-            });
-        }
-
-        function openServerModal(index = -1) {
-            document.getElementById('serverIndex').value = index;
-            document.getElementById('modalStatus').style.display = 'none';
-            if (index === -1) {
-                document.getElementById('modalTitle').innerText = 'Add Server';
-                document.getElementById('serverForm').reset();
-                document.getElementById('srvUser').value = 'root';
-                document.getElementById('srvPort').value = '22';
-            } else {
-                const s = servers[index];
-                document.getElementById('modalTitle').innerText = 'Edit Server: ' + s.alias;
-                document.getElementById('srvAlias').value = s.alias;
-                document.getElementById('srvHost').value = s.host;
-                document.getElementById('srvUser').value = s.user;
-                document.getElementById('srvPort').value = s.port;
-                document.getElementById('srvAuth').value = s.auth_method;
-                document.getElementById('srvPassword').value = s.password || '';
-                document.getElementById('srvKey').value = s.key || '';
-            }
-            toggleAuthFields();
-            document.getElementById('serverModal').style.display = 'block';
-        }
-
-        function closeServerModal() {
-            document.getElementById('serverModal').style.display = 'none';
-        }
-
-        function toggleAuthFields() {
-            const method = document.getElementById('srvAuth').value;
-            document.getElementById('passwordField').style.display = method === 'password' ? 'block' : 'none';
-            document.getElementById('keyField').style.display = method === 'key' ? 'block' : 'none';
-        }
-
-        async function testServerConnection() {
-            const status = document.getElementById('modalStatus');
-            status.style.display = 'block';
-            status.style.backgroundColor = 'rgba(255,255,255,0.1)';
-            status.innerText = 'Testing connection...';
-
-            const serverData = {
-                host: document.getElementById('srvHost').value,
-                user: document.getElementById('srvUser').value,
-                port: document.getElementById('srvPort').value,
-                auth_method: document.getElementById('srvAuth').value,
-                password: document.getElementById('srvPassword').value,
-                key: document.getElementById('srvKey').value
-            };
-
-            try {
-                const res = await fetch('/api/test-server', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                    body: JSON.stringify(serverData)
-                });
-                const result = await res.json();
-                status.innerText = result.message;
-                status.style.backgroundColor = result.success ? 'var(--success)' : 'var(--danger)';
-            } catch (e) {
-                status.innerText = 'Test failed: ' + e.message;
-                status.style.backgroundColor = 'var(--danger)';
-            }
-        }
-
-        document.getElementById('serverForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const index = parseInt(document.getElementById('serverIndex').value);
-            const serverData = {
-                alias: document.getElementById('srvAlias').value,
-                host: document.getElementById('srvHost').value,
-                user: document.getElementById('srvUser').value,
-                port: parseInt(document.getElementById('srvPort').value),
-                auth_method: document.getElementById('srvAuth').value,
-                password: document.getElementById('srvPassword').value,
-                key: document.getElementById('srvKey').value
-            };
-
-            if (index === -1) {
-                servers.push(serverData);
-            } else {
-                servers[index] = serverData;
-            }
-
-            renderServers();
-            closeServerModal();
-            saveFullConfig();
+                    <div class="flex gap-2 mt-3 flex-wrap">
+                        <span class="px-2.5 py-1 bg-surface-container-highest rounded-lg text-[10px] font-bold uppercase tracking-wider text-outline">${escapeHtml(s.user)}@${escapeHtml(String(s.port))}</span>
+                        <span class="px-2.5 py-1 bg-surface-container-highest rounded-lg text-[10px] font-bold uppercase tracking-wider text-outline">${escapeHtml(s.auth_method)}</span>
+                    </div>
+                </div>`;
+            list.appendChild(item);
         });
+    }
 
-        function editServer(index) { openServerModal(index); }
-
-        function deleteServer(index) {
-            if (confirm('Delete server ' + servers[index].alias + '?')) {
-                servers.splice(index, 1);
-                renderServers();
-                saveFullConfig();
-            }
+    /* ── Server Modal ── */
+    function openServerModal(index = -1) {
+        document.getElementById('serverIndex').value = index;
+        document.getElementById('modalStatus').classList.add('hidden');
+        if (index === -1) {
+            document.getElementById('modalTitle').innerText = 'Add Server';
+            document.getElementById('serverForm').reset();
+            document.getElementById('srvUser').value = 'root';
+            document.getElementById('srvPort').value = '22';
+        } else {
+            const s = servers[index];
+            document.getElementById('modalTitle').innerText = 'Edit: ' + s.alias;
+            document.getElementById('srvAlias').value = s.alias;
+            document.getElementById('srvHost').value = s.host;
+            document.getElementById('srvUser').value = s.user;
+            document.getElementById('srvPort').value = s.port;
+            document.getElementById('srvAuth').value = s.auth_method;
+            document.getElementById('srvPassword').value = s.password || '';
+            document.getElementById('srvKey').value = s.key || '';
         }
+        toggleAuthFields();
+        document.getElementById('serverModal').classList.remove('hidden');
+        document.body.classList.add('modal-open');
+    }
 
-        async function saveCoreConfig() {
-            const data = {
-                discord: {
-                    token: document.getElementById('DISCORD_TOKEN').value,
-                    guild_id: document.getElementById('GUILD_ID').value,
-                    allowed_roles: document.getElementById('ALLOWED_ROLES').value
-                },
-                features: {
-                    enable_docker: document.getElementById('ENABLE_DOCKER').checked ? 'true' : 'false',
-                    power_control_enabled: document.getElementById('POWER_CONTROL_ENABLED').checked ? 'true' : 'false',
-                    power_control_password: document.getElementById('POWER_CONTROL_PASSWORD').value
-                },
-                webui: {
-                    enabled: config.webui.enabled,
-                    password: document.getElementById('WEB_PASSWORD').value
-                },
-                servers: servers
-            };
-            await sendConfig(data);
+    function closeServerModal() {
+        document.getElementById('serverModal').classList.add('hidden');
+        document.body.classList.remove('modal-open');
+    }
+
+    function toggleAuthFields() {
+        const method = document.getElementById('srvAuth').value;
+        document.getElementById('passwordField').classList.toggle('hidden', method !== 'password');
+        document.getElementById('keyField').classList.toggle('hidden', method !== 'key');
+    }
+
+    async function testServerConnection() {
+        const statusEl = document.getElementById('modalStatus');
+        statusEl.classList.remove('hidden');
+        statusEl.className = 'rounded-xl px-4 py-3 text-sm font-medium bg-surface-container-highest text-on-surface-variant';
+        statusEl.innerText = 'Testing connection…';
+
+        const serverData = {
+            host: document.getElementById('srvHost').value,
+            user: document.getElementById('srvUser').value,
+            port: document.getElementById('srvPort').value,
+            auth_method: document.getElementById('srvAuth').value,
+            password: document.getElementById('srvPassword').value,
+            key: document.getElementById('srvKey').value
+        };
+
+        try {
+            const res = await fetch('/api/test-server', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                body: JSON.stringify(serverData)
+            });
+            const result = await res.json();
+            statusEl.innerText = result.message;
+            statusEl.className = result.success
+                ? 'rounded-xl px-4 py-3 text-sm font-medium bg-[#23a55a]/20 text-[#4ade80]'
+                : 'rounded-xl px-4 py-3 text-sm font-medium bg-error-container/20 text-error';
+        } catch (e) {
+            statusEl.innerText = 'Test failed: ' + e.message;
+            statusEl.className = 'rounded-xl px-4 py-3 text-sm font-medium bg-error-container/20 text-error';
         }
+    }
 
-        async function saveFullConfig() {
-            const data = {
-                discord: config.discord,
-                features: config.features,
-                webui: config.webui,
-                servers: servers
-            };
-            if (document.getElementById('DISCORD_TOKEN')) {
-                data.discord.token = document.getElementById('DISCORD_TOKEN').value;
-                data.discord.guild_id = document.getElementById('GUILD_ID').value;
-                data.discord.allowed_roles = document.getElementById('ALLOWED_ROLES').value;
-                data.features.enable_docker = document.getElementById('ENABLE_DOCKER').checked ? 'true' : 'false';
-                data.features.power_control_enabled = document.getElementById('POWER_CONTROL_ENABLED').checked ? 'true' : 'false';
-                data.features.power_control_password = document.getElementById('POWER_CONTROL_PASSWORD').value;
-                data.webui.password = document.getElementById('WEB_PASSWORD').value;
-            }
-            await sendConfig(data);
+    document.getElementById('serverForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const index = parseInt(document.getElementById('serverIndex').value);
+        const serverData = {
+            alias: document.getElementById('srvAlias').value,
+            host: document.getElementById('srvHost').value,
+            user: document.getElementById('srvUser').value,
+            port: parseInt(document.getElementById('srvPort').value),
+            auth_method: document.getElementById('srvAuth').value,
+            password: document.getElementById('srvPassword').value,
+            key: document.getElementById('srvKey').value
+        };
+        if (index === -1) {
+            servers.push(serverData);
+        } else {
+            servers[index] = serverData;
         }
-
-        async function sendConfig(data) {
-            try {
-                const res = await fetch('/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                    body: JSON.stringify(data)
-                });
-                if (res.ok) alert('Configuration saved successfully!');
-                else alert('Error saving configuration');
-            } catch (e) { alert('Connection error'); }
-        }
-
-        async function fetchLogs() {
-            const logBox = document.getElementById('logs-container');
-            try {
-                const res = await fetch('/api/logs');
-                const data = await res.json();
-                if (data.logs) {
-                    const wasNearBottom = logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 50;
-                    logBox.innerText = data.logs;
-                    if (wasNearBottom) logBox.scrollTop = logBox.scrollHeight;
-                } else {
-                    logBox.innerText = 'Waiting for logs...';
-                }
-            } catch (e) { console.error('Log fetch error:', e); }
-        }
-
-        // Initial render
         renderServers();
-        fetchLogs();
-        setInterval(fetchLogs, 5000);
-    </script>
+        closeServerModal();
+        saveFullConfig();
+    });
+
+    function editServer(index) { openServerModal(index); }
+
+    function deleteServer(index) {
+        if (confirm('Delete server "' + servers[index].alias + '"?')) {
+            servers.splice(index, 1);
+            renderServers();
+            saveFullConfig();
+        }
+    }
+
+    /* ── Config Save Functions ── */
+    async function saveCoreConfig() {
+        const data = {
+            discord: {
+                token: document.getElementById('DISCORD_TOKEN').value,
+                guild_id: document.getElementById('GUILD_ID').value,
+                allowed_roles: document.getElementById('ALLOWED_ROLES').value
+            },
+            features: {
+                enable_docker: document.getElementById('ENABLE_DOCKER').checked ? 'true' : 'false',
+                power_control_enabled: document.getElementById('POWER_CONTROL_ENABLED').checked ? 'true' : 'false',
+                power_control_password: document.getElementById('POWER_CONTROL_PASSWORD').value
+            },
+            webui: {
+                enabled: config.webui ? config.webui.enabled : true,
+                password: document.getElementById('WEB_PASSWORD').value
+            },
+            servers: servers
+        };
+        await sendConfig(data);
+    }
+
+    async function saveFullConfig() {
+        const data = {
+            discord: config.discord ? Object.assign({}, config.discord) : {},
+            features: config.features ? Object.assign({}, config.features) : {},
+            webui: config.webui ? Object.assign({}, config.webui) : {},
+            servers: servers
+        };
+        if (document.getElementById('DISCORD_TOKEN')) {
+            data.discord.token = document.getElementById('DISCORD_TOKEN').value;
+            data.discord.guild_id = document.getElementById('GUILD_ID').value;
+            data.discord.allowed_roles = document.getElementById('ALLOWED_ROLES').value;
+            data.features.enable_docker = document.getElementById('ENABLE_DOCKER').checked ? 'true' : 'false';
+            data.features.power_control_enabled = document.getElementById('POWER_CONTROL_ENABLED').checked ? 'true' : 'false';
+            data.features.power_control_password = document.getElementById('POWER_CONTROL_PASSWORD').value;
+            data.webui.password = document.getElementById('WEB_PASSWORD').value;
+        }
+        await sendConfig(data);
+    }
+
+    async function sendConfig(data) {
+        try {
+            const res = await fetch('/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                showSaveStatus('Configuration saved', false);
+            } else {
+                showSaveStatus('Save failed', true);
+            }
+        } catch (e) {
+            showSaveStatus('Connection error', true);
+        }
+    }
+
+    /* ── Log Viewer ── */
+    async function fetchLogs() {
+        const logBox = document.getElementById('logs-container');
+        try {
+            const res = await fetch('/api/logs');
+            const data = await res.json();
+            if (data.logs) {
+                const wasNearBottom = logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 50;
+                logBox.innerText = data.logs;
+                if (wasNearBottom) logBox.scrollTop = logBox.scrollHeight;
+            } else {
+                logBox.innerText = 'Waiting for logs…';
+            }
+        } catch (e) {
+            console.error('Log fetch error:', e);
+        }
+    }
+
+    /* ── Sidebar active state on scroll ── */
+    function updateActiveNav() {
+        const sections = ['settings', 'discord', 'features', 'servers', 'logs'];
+        const main = document.querySelector('main');
+        let current = '';
+        sections.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                const rect = el.getBoundingClientRect();
+                if (rect.top <= 100) current = id;
+            }
+        });
+        document.querySelectorAll('.nav-link').forEach(link => {
+            const sec = link.getAttribute('data-section');
+            link.classList.toggle('nav-active', sec === current);
+            if (sec !== current) {
+                link.classList.remove('text-primary');
+                link.classList.add('text-on-surface-variant');
+            } else {
+                link.classList.add('text-primary');
+                link.classList.remove('text-on-surface-variant');
+            }
+        });
+    }
+
+    /* ── Init ── */
+    renderServers();
+    fetchLogs();
+    setInterval(fetchLogs, 5000);
+    document.querySelector('main').addEventListener('scroll', updateActiveNav);
+    updateActiveNav();
+</script>
 </body>
 </html>
