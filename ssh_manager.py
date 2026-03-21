@@ -150,7 +150,7 @@ class SSHManager:
             return False, f"Error closing connection: {str(e)}", None
 
     def execute_command(self, alias: str, command: str) -> str:
-        """Connect to a server by alias and execute a command."""
+        """Connect to a server by alias and execute a command with sudo support."""
         config = self.get_server_by_alias(alias)
         client, err, _ = self._get_ssh_client(config)
         if err:
@@ -158,9 +158,26 @@ class SSHManager:
             return f"SSH Error: {err}"
 
         try:
-            stdin, stdout, stderr = client.exec_command(command, timeout=60)
+            # Handle sudo for non-root users if a password is available
+            user = config.get('user', 'root')
+            password = config.get('password')
+            
+            if user != 'root' and command.startswith('sudo ') and password:
+                # Use -S to read password from stdin
+                command = command.replace('sudo ', f'sudo -S ', 1)
+                stdin, stdout, stderr = client.exec_command(command, timeout=60)
+                stdin.write(password + '\n')
+                stdin.flush()
+            else:
+                stdin, stdout, stderr = client.exec_command(command, timeout=60)
+
             output = stdout.read().decode('utf-8')
             error = stderr.read().decode('utf-8')
+
+            # Clean up sudo password prompt from error output if present
+            if "[sudo] password for" in error:
+                lines = error.splitlines()
+                error = "\n".join([l for l in lines if "[sudo] password for" not in l]).strip()
 
             if error and output:
                 return f"{output}\n[Error Output]\n{error}"
