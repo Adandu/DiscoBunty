@@ -576,19 +576,21 @@
         document.getElementById('keyField').classList.toggle('hidden', method !== 'key');
     }
 
-    async function testServerConnection() {
+    async function testServerConnection(trustHost = false) {
         const statusEl = document.getElementById('modalStatus');
         statusEl.classList.remove('hidden');
         statusEl.className = 'rounded-xl px-4 py-3 text-sm font-medium bg-surface-container-highest text-on-surface-variant';
-        statusEl.innerText = 'Testing connection…';
+        statusEl.innerText = trustHost ? 'Trusting and connecting…' : 'Testing connection…';
 
         const serverData = {
+            alias: document.getElementById('srvAlias').value,
             host: document.getElementById('srvHost').value,
             user: document.getElementById('srvUser').value,
             port: document.getElementById('srvPort').value,
             auth_method: document.getElementById('srvAuth').value,
             password: document.getElementById('srvPassword').value,
-            key: document.getElementById('srvKey').value
+            key: document.getElementById('srvKey').value,
+            trust_host: trustHost
         };
 
         try {
@@ -598,10 +600,44 @@
                 body: JSON.stringify(serverData)
             });
             const result = await res.json();
-            statusEl.innerText = result.message;
-            statusEl.className = result.success
-                ? 'rounded-xl px-4 py-3 text-sm font-medium bg-[#23a55a]/20 text-[#4ade80]'
-                : 'rounded-xl px-4 py-3 text-sm font-medium bg-error-container/20 text-error';
+            
+            if (!result.success && result.message === 'Host key mismatch') {
+                // SECURITY ALERT: Key has changed for a known host
+                statusEl.innerHTML = `
+                    <div class="flex flex-col gap-3">
+                        <p class="text-error font-bold">🚨 SECURITY ALERT: Host Key Changed!</p>
+                        <p class="text-xs text-on-surface-variant">The fingerprint stored in known_hosts does not match the server. This could be a Man-in-the-Middle attack or the server has been reinstalled.</p>
+                        <div class="bg-surface-container-lowest p-3 rounded-lg border border-error/20">
+                            <p class="text-[10px] text-outline uppercase font-bold mb-1">New Fingerprint (SHA256)</p>
+                            <code id="fp-code-alert" class="text-xs break-all text-on-surface-variant"></code>
+                        </div>
+                        <p class="text-xs font-bold text-error">Automatic trusting is blocked for safety.</p>
+                    </div>`;
+                document.getElementById('fp-code-alert').textContent = result.fingerprint;
+                statusEl.className = 'rounded-xl px-4 py-3 text-sm font-medium bg-error-container/20 border border-error/40';
+            } else if (!result.success && result.fingerprint) {
+                // Unknown new host: Show trust button
+                statusEl.innerHTML = `
+                    <div class="flex flex-col gap-3">
+                        <p class="text-error font-bold">⚠️ Unknown Host Key</p>
+                        <div class="bg-surface-container-lowest p-3 rounded-lg border border-error/20">
+                            <p class="text-[10px] text-outline uppercase font-bold mb-1">Fingerprint (SHA256)</p>
+                            <code id="fp-code" class="text-xs break-all text-on-surface-variant"></code>
+                        </div>
+                        <p class="text-[10px] text-on-surface-variant italic">Please verify this fingerprint matches your server's host key.</p>
+                        <button type="button" onclick="testServerConnection(true)" 
+                            class="py-2 px-4 bg-primary-container text-on-primary-container text-xs font-bold rounded-lg hover:scale-[1.02] active:scale-95 transition-all">
+                            Trust & Add Host Key
+                        </button>
+                    </div>`;
+                document.getElementById('fp-code').textContent = result.fingerprint;
+                statusEl.className = 'rounded-xl px-4 py-3 text-sm font-medium bg-error-container/20';
+            } else {
+                statusEl.innerText = result.message;
+                statusEl.className = result.success
+                    ? 'rounded-xl px-4 py-3 text-sm font-medium bg-[#23a55a]/20 text-[#4ade80]'
+                    : 'rounded-xl px-4 py-3 text-sm font-medium bg-error-container/20 text-error';
+            }
         } catch (e) {
             statusEl.innerText = 'Test failed: ' + e.message;
             statusEl.className = 'rounded-xl px-4 py-3 text-sm font-medium bg-error-container/20 text-error';

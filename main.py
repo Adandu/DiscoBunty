@@ -344,8 +344,12 @@ async def add_security_headers(request: Request, call_next):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-# Mount the root directory as static to serve the logo/favicon
-app.mount("/static", StaticFiles(directory=BASE_DIR), name="static")
+# Create static directory if it doesn't exist to prevent mount error
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+os.makedirs(STATIC_DIR, exist_ok=True)
+
+# Mount the static directory only (NOT BASE_DIR to avoid exposing config/env/keys)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 def is_authenticated(request: Request):
     web_pass = config["webui"].get("password")
@@ -436,15 +440,37 @@ async def test_server(request: Request, server_data: dict):
     if not is_authenticated(request): raise HTTPException(status_code=401)
     validate_csrf(request)
     
-    # If password/key is masked (********), use the original from config
-    if server_data.get("alias"):
-        orig = next((s for s in config["servers"] if s["alias"] == server_data["alias"]), None)
-        if orig:
-            if server_data.get("password") == "********": server_data["password"] = orig.get("password")
-            if server_data.get("key") == "********": server_data["key"] = orig.get("key")
+    trust_host = server_data.get("trust_host", False)
+    alias = server_data.get("alias")
+    host = server_data.get("host")
+    port = int(server_data.get("port", 22))
 
-    success, message = await asyncio.to_thread(ssh_manager.test_server_connection, server_data)
-    return {"success": success, "message": message}
+    # Configuration Guard: Connection tests must match a configured server to prevent SSRF
+    configured_servers = config_manager.get_server_config()
+    orig = None
+    if alias:
+        orig = next((s for s in configured_servers if s["alias"] == alias), None)
+    
+    if not orig:
+        # If no alias, try to match by host and port
+        orig = next((s for s in configured_servers if s.get("host") == host and int(s.get("port", 22)) == port), None)
+
+    if not orig:
+        return JSONResponse(
+            status_code=403,
+            content={"success": False, "message": "Security Error: Connection tests are only allowed for configured servers."}
+        )
+    
+    # SECURITY: Always use the host and port from the OFFICIAL config, not user input
+    server_data["host"] = orig.get("host")
+    server_data["port"] = orig.get("port", 22)
+
+    # If password/key is masked (********), use the original from config
+    if server_data.get("password") == "********": server_data["password"] = orig.get("password")
+    if server_data.get("key") == "********": server_data["key"] = orig.get("key")
+
+    success, message, fingerprint = await asyncio.to_thread(ssh_manager.test_server_connection, server_data, trust_host=trust_host)
+    return {"success": success, "message": message, "fingerprint": fingerprint}
 
 @app.post("/save")
 async def save_config_ui(request: Request, data: dict):

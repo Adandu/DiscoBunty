@@ -26,10 +26,13 @@ class SSHManager:
                 return s
         return None
 
-    def _get_ssh_client(self, config: Dict) -> Tuple[Optional[paramiko.SSHClient], Optional[str]]:
-        """Internal helper to create and connect an SSH client given a config dictionary."""
+    def _get_ssh_client(self, config: Dict, trust_host: bool = False) -> Tuple[Optional[paramiko.SSHClient], Optional[str], Optional[str]]:
+        """
+        Internal helper to create and connect an SSH client.
+        Returns (client, error_message, fingerprint).
+        """
         if not config:
-            return None, "Error: Invalid server configuration."
+            return None, "Error: Invalid server configuration.", None
 
         host = config.get('host')
         user = config.get('user', 'root')
@@ -39,26 +42,59 @@ class SSHManager:
         client = paramiko.SSHClient()
         known_hosts_path = os.getenv('KNOWN_HOSTS_FILE', '/app/.ssh/known_hosts')
         
+        # 1. Fingerprint Capture Policy
+        class FingerprintCapturePolicy(paramiko.MissingHostKeyPolicy):
+            def __init__(self):
+                self.key = None
+                self.fingerprint = None
+            def missing_host_key(self, client, hostname, key):
+                self.key = key
+                # Capture SHA256 fingerprint
+                fp_bytes = key.get_fingerprint()
+                self.fingerprint = f"SHA256:{io.BytesIO(fp_bytes).read().hex()}" # Placeholder, better way below
+                # Standard OpenSSH SHA256 format
+                import base64
+                import hashlib
+                self.fingerprint = "SHA256:" + base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode('utf-8').replace('=', '')
+                raise paramiko.SSHException(f"Host key verification failed for {hostname}")
+
+        capture_policy = FingerprintCapturePolicy()
+        
+        if trust_host:
+            os.makedirs(os.path.dirname(known_hosts_path), exist_ok=True)
+
         if os.path.exists(known_hosts_path):
             try:
                 client.load_host_keys(known_hosts_path)
-                client.set_missing_host_key_policy(paramiko.RejectPolicy())
+                
+                # Check if host is already in known_hosts
+                host_keys = client.get_host_keys()
+                host_str = f"[{host}]:{port}" if port != 22 else host
+                
+                if trust_host:
+                    # Security: If key already exists but is different, block AutoAddPolicy
+                    if host_str in host_keys or host in host_keys:
+                        client.set_missing_host_key_policy(paramiko.RejectPolicy())
+                    else:
+                        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                else:
+                    client.set_missing_host_key_policy(capture_policy)
+                
                 logger.info(f"Loaded known_hosts from {known_hosts_path}")
             except Exception as e:
                 logger.error(f"Failed to load known_hosts: {e}")
-                # For testing purposes, we might want to allow AutoAddPolicy if not found, 
-                # but following current bot policy of RejectPolicy.
-                return None, f"Error: Failed to load SSH known_hosts from {known_hosts_path}."
+                return None, f"Error: Failed to load SSH known_hosts from {known_hosts_path}.", None
         else:
-            # Fallback for initial setup/testing if known_hosts isn't there yet
-            logger.warning(f"No known_hosts file found at {known_hosts_path}. Using AutoAddPolicy (INSECURE).")
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            if trust_host:
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            else:
+                client.set_missing_host_key_policy(capture_policy)
 
         try:
             if auth_method == 'key':
                 key_value = config.get('key')
                 if not key_value:
-                    return None, f"Error: SSH Key not provided."
+                    return None, "Error: SSH Key not provided.", None
 
                 if key_value.startswith('/') or (os.path.exists(key_value) and os.path.isfile(key_value)):
                     client.connect(hostname=host, port=port, username=user, key_filename=key_value, timeout=10)
@@ -71,34 +107,55 @@ class SSHManager:
                         except Exception: continue
                     
                     if not private_key:
-                        return None, f"Error: Could not parse SSH key string."
+                        return None, "Error: Could not parse SSH key string.", None
                     
                     client.connect(hostname=host, port=port, username=user, pkey=private_key, timeout=10)
             else:
                 password = config.get('password')
                 if not password:
-                    return None, f"Error: Password not provided."
+                    return None, "Error: Password not provided.", None
                 client.connect(hostname=host, port=port, username=user, password=password, timeout=10)
             
-            return client, None
-        except Exception as e:
-            return None, str(e)
+            if trust_host:
+                try:
+                    client.save_host_keys(known_hosts_path)
+                    logger.info(f"Successfully added and saved host key for {host} to {known_hosts_path}")
+                except Exception as save_err:
+                    err_msg = f"Failed to save host keys to {known_hosts_path}: {save_err}"
+                    logger.error(err_msg)
+                    return None, f"Error: Connection successful but {err_msg}", None
 
-    def test_server_connection(self, config: Dict) -> Tuple[bool, str]:
-        """Attempt to connect to a server with given config and return (success, message)."""
-        client, err = self._get_ssh_client(config)
+            return client, None, None
+        except paramiko.BadHostKeyException as e:
+            # Capture the new fingerprint even on mismatch for display
+            import base64
+            import hashlib
+            new_fp = "SHA256:" + base64.b64encode(hashlib.sha256(e.key.asbytes()).digest()).decode('utf-8').replace('=', '')
+            return None, "Host key mismatch", new_fp
+        except paramiko.SSHException as e:
+            msg = str(e)
+            if "Host key verification failed" in msg:
+                # Return the captured fingerprint if available
+                return None, msg, capture_policy.fingerprint
+            return None, msg, None
+        except Exception as e:
+            return None, str(e), None
+
+    def test_server_connection(self, config: Dict, trust_host: bool = False) -> Tuple[bool, str, Optional[str]]:
+        """Attempt to connect and return (success, message, fingerprint)."""
+        client, err, fingerprint = self._get_ssh_client(config, trust_host=trust_host)
         if err:
-            return False, err
+            return False, err, fingerprint
         try:
             client.close()
-            return True, "✅ Connection Successful!"
+            return True, "✅ Connection Successful!", None
         except Exception as e:
-            return False, f"Error closing connection: {str(e)}"
+            return False, f"Error closing connection: {str(e)}", None
 
     def execute_command(self, alias: str, command: str) -> str:
         """Connect to a server by alias and execute a command."""
         config = self.get_server_by_alias(alias)
-        client, err = self._get_ssh_client(config)
+        client, err, _ = self._get_ssh_client(config)
         if err:
             logger.error(f"SSH Connection Error on '{alias}': {err}")
             return f"SSH Error: {err}"
@@ -216,7 +273,7 @@ class SSHManager:
         logger.info(f"Initiating {action} on '{alias}' via command: {cmd}")
         
         config = self.get_server_by_alias(alias)
-        client, err = self._get_ssh_client(config)
+        client, err, _ = self._get_ssh_client(config)
         if err:
             logger.error(f"SSH Connection Error for {action} on '{alias}': {err}")
             return f"SSH Error: {err}"
