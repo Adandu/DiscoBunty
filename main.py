@@ -344,11 +344,9 @@ async def add_security_headers(request: Request, call_next):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
-# Create static directory if it doesn't exist to prevent mount error
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-os.makedirs(STATIC_DIR, exist_ok=True)
-
 # Mount the static directory only (NOT BASE_DIR to avoid exposing config/env/keys)
+# This directory is now included in the image via the repository.
+STATIC_DIR = os.path.join(BASE_DIR, "static")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 def is_authenticated(request: Request):
