@@ -129,10 +129,10 @@ def is_admin():
 # --- Autocomplete Helpers ---
 async def server_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     if not check_permissions(interaction.user): return []
-    aliases = ssh_manager.get_server_aliases()
+    aliases = sorted(ssh_manager.get_server_aliases(), key=lambda x: x.lower())
     return [app_commands.Choice(name=alias, value=alias) for alias in aliases if current.lower() in alias.lower()]
 
-async function container_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+async def container_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     if not check_permissions(interaction.user): return []
     server = interaction.namespace.server
     if not server: return []
@@ -143,14 +143,14 @@ async function container_autocomplete(interaction: discord.Interaction, current:
         return [app_commands.Choice(name=name, value=name) for name in sorted_containers if current.lower() in name.lower()][:25]
     except Exception: return []
 
-
 async def log_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     if not check_permissions(interaction.user): return []
     server = interaction.namespace.server
     if not server: return []
     try:
         logs = await asyncio.to_thread(ssh_manager.get_log_files, server)
-        return [app_commands.Choice(name=path, value=path) for path in logs if current.lower() in path.lower()][:25]
+        sorted_logs = sorted(logs, key=lambda x: x.lower())
+        return [app_commands.Choice(name=path, value=path) for path in sorted_logs if current.lower() in path.lower()][:25]
     except Exception: return []
 
 # --- Power Control Modal ---
