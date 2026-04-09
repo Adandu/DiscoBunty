@@ -1,4 +1,4 @@
-# DiscoBunty v0.9.5
+# DiscoBunty v0.9.6
 
 ## New Features
 
@@ -6,9 +6,9 @@
 
 ## Improvements
 
-- Tightened the dashboard form-control CSS so the app now overrides Tailwind's generated forms reset on the concrete input, textarea, and select elements used by the WebUI.
+- Strengthened the dashboard form-control override so shared input sizing and corner radius are now enforced directly on the rendered input, textarea, and select elements.
 
 ## Bug Fixes
 
-- Fixed the remaining white-background form regression caused by Tailwind's `[type='text']` and related base selectors overriding the dashboard's dark field styling.
-- Restored readable dark-mode rendering for the Core Configuration inputs and the add-server modal fields, including Port and password-auth fields.
+- Fixed inconsistent rounded corners caused by Tailwind's forms reset overriding the WebUI field radius on some controls depending on CSS order.
+- Restored the intended rounded styling for the Add Server modal Port field and the Core Configuration inputs.
