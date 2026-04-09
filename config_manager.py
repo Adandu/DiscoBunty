@@ -32,6 +32,7 @@ class ConfigManager:
         data_dir = Path(os.getenv("DATA_DIR", "data"))
         data_dir.mkdir(parents=True, exist_ok=True)
         self.config_path = Path(config_path) if config_path else data_dir / "config.json"
+        self.legacy_config_paths = [Path("config.json"), Path("/app/config.json")]
         # SECRET_KEY must still come from environment for initial decryption
         secret_key = os.getenv('SECRET_KEY')
         if not secret_key:
@@ -41,13 +42,14 @@ class ConfigManager:
         self.config = self._load_config()
 
     def _load_config(self) -> AppConfig:
-        if os.path.exists(self.config_path):
+        config_source = self._resolve_existing_config_path()
+        if config_source:
             try:
-                with open(self.config_path, 'r', encoding='utf-8') as f:
+                with open(config_source, 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                    logger.info(f"Loaded configuration from {self.config_path}")
+                    logger.info(f"Loaded configuration from {config_source}")
                     config = self._process_config(config, decrypt=True)
-                    if self._migrate_password_hashes(config):
+                    if self._migrate_password_hashes(config) or config_source != self.config_path:
                         self.save_config(AppConfig.model_validate(config))
                     return AppConfig.model_validate(config)
             except Exception as e:
@@ -55,6 +57,22 @@ class ConfigManager:
         
         logger.warning("Config file not found or invalid. Using defaults/env migration.")
         return self._migrate_from_env()
+
+    def _resolve_existing_config_path(self) -> Path | None:
+        if self.config_path.exists():
+            return self.config_path
+
+        for candidate in self.legacy_config_paths:
+            try:
+                if candidate.resolve() == self.config_path.resolve():
+                    continue
+            except FileNotFoundError:
+                pass
+            if candidate.exists() and candidate.is_file():
+                logger.warning("Using legacy config path %s and migrating it to %s", candidate, self.config_path)
+                return candidate
+
+        return None
 
     def _migrate_from_env(self) -> AppConfig:
         """Helper to migrate existing .env settings to the new JSON format."""

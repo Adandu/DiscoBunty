@@ -47,6 +47,38 @@ class ConfigManagerTests(unittest.TestCase):
             self.assertTrue(saved["features"]["enable_docker"])
             self.assertFalse(saved["webui"]["enabled"])
 
+    def test_legacy_config_path_is_migrated_into_data_dir(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            data_dir = workspace / "data"
+            data_dir.mkdir()
+            legacy_config = workspace / "config.json"
+            legacy_config.write_text(
+                json.dumps(
+                    {
+                        "discord": {"token": "", "guild_id": "", "allowed_roles": "Admin"},
+                        "features": {"enable_docker": True, "power_control_enabled": False, "power_control_password": ""},
+                        "webui": {"enabled": True, "password": "legacy-password"},
+                        "servers": [{"alias": "srv1", "host": "1.2.3.4", "user": "root", "port": 22, "auth_method": "key", "password": "", "key": ""}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            env = {"SECRET_KEY": "z" * 32, "DATA_DIR": str(data_dir)}
+            with patch.dict(os.environ, env, clear=False):
+                current_dir = os.getcwd()
+                os.chdir(workspace)
+                try:
+                    manager = ConfigManager()
+                finally:
+                    os.chdir(current_dir)
+
+            self.assertEqual(manager.config.servers[0].alias, "srv1")
+            self.assertTrue((data_dir / "config.json").exists())
+            migrated = json.loads((data_dir / "config.json").read_text(encoding="utf-8"))
+            self.assertTrue(migrated["webui"]["password"].startswith("PBKDF2_SHA256$"))
+
 
 if __name__ == "__main__":
     unittest.main()
