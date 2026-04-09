@@ -404,6 +404,7 @@
 
         <form id="serverForm" class="space-y-4">
             <input type="hidden" id="serverIndex" value="-1">
+            <input type="hidden" id="srvOriginalAlias" value="">
 
             <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -580,11 +581,13 @@
         if (index === -1) {
             document.getElementById('modalTitle').innerText = 'Add Server';
             document.getElementById('serverForm').reset();
+            document.getElementById('srvOriginalAlias').value = '';
             document.getElementById('srvUser').value = 'root';
             document.getElementById('srvPort').value = '22';
         } else {
             const s = servers[index];
             document.getElementById('modalTitle').innerText = 'Edit: ' + s.alias;
+            document.getElementById('srvOriginalAlias').value = s._original_alias || s.alias || '';
             document.getElementById('srvAlias').value = s.alias;
             document.getElementById('srvHost').value = s.host;
             document.getElementById('srvUser').value = s.user;
@@ -617,6 +620,7 @@
 
         const serverData = {
             alias: document.getElementById('srvAlias').value,
+            _original_alias: document.getElementById('srvOriginalAlias').value,
             host: document.getElementById('srvHost').value,
             user: document.getElementById('srvUser').value,
             port: document.getElementById('srvPort').value,
@@ -682,6 +686,7 @@
         const index = parseInt(document.getElementById('serverIndex').value);
         const serverData = {
             alias: document.getElementById('srvAlias').value,
+            _original_alias: document.getElementById('srvOriginalAlias').value,
             host: document.getElementById('srvHost').value,
             user: document.getElementById('srvUser').value,
             port: parseInt(document.getElementById('srvPort').value),

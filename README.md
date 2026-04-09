@@ -52,8 +52,12 @@ The bot now uses a hybrid configuration system. Initial secrets are set via envi
 - `SECRET_KEY`: A 32+ character random string used to encrypt all local secrets. **Do not lose this.**
 - `WEBUI_ENABLED`: Set to `true` to enable the dashboard.
 
+**Recommended Security Environment Variables:**
+- `TRUSTED_PROXY_IPS`: Comma-separated IPs allowed to supply forwarded headers. Default is `127.0.0.1`.
+- `WEBUI_SECURE_COOKIES`: Set to `true` when the WebUI is served over HTTPS via a reverse proxy.
+
 **WebUI Access:**
-Once the container is running, navigate to `http://<your-ip>:8083` to configure your bot token and servers.
+Once the container is running, navigate to `http://<your-ip>:8000` to configure your bot token and servers.
 
 ### 3. Run with Docker
 ```bash
@@ -83,6 +87,10 @@ botuser ALL=(ALL) NOPASSWD: /usr/sbin/reboot, /usr/sbin/shutdown
 ### SSH Hardening
 - **Known Hosts:** Ensure the `KNOWN_HOSTS_FILE` is correctly configured to prevent Man-in-the-Middle attacks.
 - **SSH Keys:** Always prefer SSH Keys over passwords for better security.
+
+### Password Storage
+- The WebUI login password and power-control confirmation password are now stored as one-way password hashes when saved to `config.json`.
+- `SECRET_KEY` rotation is intentionally not supported from the WebUI because changing it without a coordinated re-encryption step can break existing encrypted settings.
 
 ---
 

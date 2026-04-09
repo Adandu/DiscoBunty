@@ -11,11 +11,12 @@ import time
 from collections import deque, defaultdict
 from discord import app_commands
 from dotenv import load_dotenv
+from auth_utils import verify_password
 from ssh_manager import SSHManager
 from config_manager import ConfigManager
 
 # FastAPI Imports
-from fastapi import FastAPI, Request, Form, HTTPException, Depends
+from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -59,11 +60,7 @@ def audit_log(user_id: int, username: str, command: str, details: str):
     logger.info(f"AUDIT: {log_entry.strip()}")
 
 def _get_client_ip(request: Request) -> str:
-    """Return the client IP address, taking only the first (leftmost) value from
-    X-Forwarded-For to avoid spoofing via attacker-controlled intermediate hops."""
-    xff = request.headers.get("X-Forwarded-For", "")
-    if xff:
-        return xff.split(",")[0].strip()
+    """Return the client IP address as normalized by the ASGI server."""
     return request.client.host if request.client else "unknown"
 
 class WebUIHandler(logging.Handler):
@@ -170,7 +167,7 @@ class PowerControlModal(discord.ui.Modal, title='Verify Power Action'):
         self.server = server
         self.action = action
     async def on_submit(self, interaction: discord.Interaction):
-        if self.password.value != config["features"].get("power_control_password"):
+        if not verify_password(self.password.value, config["features"].get("power_control_password", "")):
             await interaction.response.send_message("❌ Incorrect password. Action aborted.", ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)
@@ -332,12 +329,15 @@ MASTER_KEY = os.getenv("SECRET_KEY")
 if not MASTER_KEY:
     raise ValueError("SECRET_KEY environment variable is mandatory for WebUI session security.")
 
+TRUSTED_PROXY_IPS = os.getenv("TRUSTED_PROXY_IPS", "127.0.0.1")
+SESSION_COOKIE_SECURE = os.getenv("WEBUI_SECURE_COOKIES", "false").lower() == "true"
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=MASTER_KEY,
     session_cookie="session",
     same_site="strict",   # CSRF protection: browser won't send cookie on cross-origin requests
-    https_only=False,     # Set to True if serving over HTTPS
+    https_only=SESSION_COOKIE_SECURE,
     max_age=3600,         # Sessions expire after 1 hour of inactivity
 )
 
@@ -440,10 +440,10 @@ async def login(request: Request, password: str = Form(...), csrf_token: str = F
     if not stored_pass:
         return RedirectResponse(url="/login?error=no_pass", status_code=303)
 
-    # Use hmac.compare_digest to prevent timing attacks
-    if hmac.compare_digest(password, stored_pass):
+    if verify_password(password, stored_pass):
         request.session.clear() # Rotate session on login
         request.session["authenticated"] = True
+        request.session["csrf_token"] = secrets.token_hex(32)
         login_limiter.reset(client_ip)
         return RedirectResponse(url="/", status_code=303)
     return RedirectResponse(url="/login?error=1", status_code=303)
@@ -515,6 +515,9 @@ async def save_config_ui(request: Request, data: dict):
         if s.get("auth_method") not in ("key", "password"):
             raise HTTPException(status_code=422, detail=f"auth_method must be 'key' or 'password'")
     
+    if "SECRET_KEY" in data:
+        raise HTTPException(status_code=400, detail="SECRET_KEY rotation is not supported from the WebUI.")
+
     # Restore masked values and sync config sections
     if data.get("discord", {}).get("token") == "********":
         data["discord"]["token"] = config["discord"].get("token", "")
@@ -524,22 +527,23 @@ async def save_config_ui(request: Request, data: dict):
         data["features"]["power_control_password"] = config["features"].get("power_control_password", "")
 
     if "servers" in data:
+        original_servers = config.get("servers", [])
+        original_by_alias = {server.get("alias"): server for server in original_servers if server.get("alias")}
         for i, s in enumerate(data["servers"]):
-            if i < len(config["servers"]):
-                orig = config["servers"][i]
-                if s.get("password") == "********": s["password"] = orig.get("password")
-                if s.get("key") == "********": s["key"] = orig.get("key")
+            original_alias = s.get("_original_alias") or s.get("alias")
+            orig = original_by_alias.get(original_alias)
+            if not orig and i < len(original_servers):
+                orig = original_servers[i]
+            if s.get("password") == "********" and orig:
+                s["password"] = orig.get("password")
+            if s.get("key") == "********" and orig:
+                s["key"] = orig.get("key")
+            s.pop("_original_alias", None)
 
     config["discord"] = data.get("discord", config["discord"])
     config["features"] = data.get("features", config["features"])
     config["webui"] = data.get("webui", config["webui"])
     config["servers"] = data.get("servers", config["servers"])
-    
-    # Update SECRET_KEY in .env if changed
-    if "SECRET_KEY" in data:
-        from dotenv import set_key
-        set_key(".env", "SECRET_KEY", data["SECRET_KEY"])
-        
     config_manager.save_config(config)
     # Refresh SSHManager servers list
     ssh_manager.servers = config["servers"]
@@ -560,9 +564,20 @@ async def main():
     if config["discord"].get("token"):
         tasks.append(bot.start(config["discord"]["token"]))
     if config["webui"].get("enabled") == "true":
-        uv_config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info", proxy_headers=True, forwarded_allow_ips="*")
+        uv_config = uvicorn.Config(
+            app,
+            host="0.0.0.0",
+            port=8000,
+            log_level="info",
+            proxy_headers=True,
+            forwarded_allow_ips=TRUSTED_PROXY_IPS,
+        )
         tasks.append(uvicorn.Server(uv_config).serve())
-    if tasks: await asyncio.gather(*tasks, return_exceptions=True)
+    if tasks:
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception):
+                logger.exception("DiscoBunty service exited with an exception", exc_info=result)
 
 if __name__ == "__main__":
     try: asyncio.run(main())

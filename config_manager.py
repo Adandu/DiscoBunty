@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import copy
+from auth_utils import hash_password, is_password_hash
 from crypto_utils import CryptoManager
 
 logger = logging.getLogger('discobunty.config')
@@ -41,7 +42,10 @@ class ConfigManager:
                 with open(self.config_path, 'r') as f:
                     config = json.load(f)
                     logger.info(f"Loaded configuration from {self.config_path}")
-                    return self._process_config(config, decrypt=True)
+                    config = self._process_config(config, decrypt=True)
+                    if self._migrate_password_hashes(config):
+                        self.save_config(config)
+                    return config
             except Exception as e:
                 logger.error(f"Failed to load config.json: {e}")
         
@@ -98,11 +102,17 @@ class ConfigManager:
         # Process top-level passwords
         if "features" in config and config["features"].get("power_control_password"):
             p = config["features"]["power_control_password"]
-            config["features"]["power_control_password"] = self.crypto.decrypt(p) if decrypt else self.crypto.encrypt(p)
+            if decrypt:
+                config["features"]["power_control_password"] = self.crypto.decrypt(p)
+            else:
+                config["features"]["power_control_password"] = hash_password(self.crypto.decrypt(p) if p.startswith("ENC:") else p)
             
         if "webui" in config and config["webui"].get("password"):
             p = config["webui"]["password"]
-            config["webui"]["password"] = self.crypto.decrypt(p) if decrypt else self.crypto.encrypt(p)
+            if decrypt:
+                config["webui"]["password"] = self.crypto.decrypt(p)
+            else:
+                config["webui"]["password"] = hash_password(self.crypto.decrypt(p) if p.startswith("ENC:") else p)
 
         # Process server passwords/keys
         if "servers" in config:
@@ -115,6 +125,22 @@ class ConfigManager:
                         s["key"] = self.crypto.decrypt(s["key"]) if decrypt else self.crypto.encrypt(s["key"])
         
         return config
+
+    def _migrate_password_hashes(self, config: dict) -> bool:
+        """Upgrade legacy plaintext runtime values to password hashes before saving."""
+        changed = False
+
+        web_password = config.get("webui", {}).get("password", "")
+        if web_password and not is_password_hash(web_password):
+            config["webui"]["password"] = hash_password(web_password)
+            changed = True
+
+        power_password = config.get("features", {}).get("power_control_password", "")
+        if power_password and not is_password_hash(power_password):
+            config["features"]["power_control_password"] = hash_password(power_password)
+            changed = True
+
+        return changed
 
     def save_config(self, new_config: dict):
         """Save configuration to JSON file with encryption."""
