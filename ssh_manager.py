@@ -450,14 +450,15 @@ class SSHManager:
         self._log_cache[alias] = (now, files)
         return files
 
-    def resolve_remote_path(self, alias: str, remote_path: str) -> str:
+    def resolve_remote_path(self, alias: str, remote_path: str) -> Optional[str]:
         """Resolve a remote path to its real path on the server to prevent symlink traversal."""
         # Use readlink -f or realpath (common on Ubuntu/Debian)
         cmd = f"realpath {shlex.quote(remote_path)}"
         output = self.execute_command(alias, cmd)
         
         if "SSH Error" in output or "Error:" in output:
-            return remote_path # Fallback if error occurs
+            logger.warning("Failed to resolve remote path %r on %s: %s", remote_path, alias, output.strip())
+            return None
             
         return output.strip()
 

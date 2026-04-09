@@ -1,11 +1,11 @@
 # Use official Python slim image
-FROM python:3.11-slim-bookworm as builder
+FROM python:3.12-slim-bookworm as builder
 
 # Set work directory
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     build-essential \
     libssl-dev \
     libffi-dev \
@@ -17,10 +17,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Final stage
-FROM python:3.11-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 # Install curl for healthcheck
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -39,7 +39,7 @@ RUN groupadd -g 10001 botgroup && \
     chown -R botuser:botgroup /app/data
 
 # Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
+COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application code with proper ownership

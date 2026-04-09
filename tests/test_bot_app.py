@@ -2,7 +2,8 @@ import unittest
 from types import SimpleNamespace
 
 from app_state import AppState
-from bot_app import check_permissions
+from bot_app import build_user_facing_error_message, check_permissions, is_allowed_log_path
+from discord import app_commands
 from models import AppConfig
 
 
@@ -25,6 +26,18 @@ class BotPermissionTests(unittest.TestCase):
         self.assertTrue(check_permissions(state, user, "alpha"))
         self.assertFalse(check_permissions(state, user, "beta"))
         self.assertTrue(check_permissions(state, sre_user, "beta"))
+
+    def test_log_path_validation_requires_absolute_allowed_root(self):
+        self.assertTrue(is_allowed_log_path("/var/log/syslog"))
+        self.assertTrue(is_allowed_log_path("/home/app/logs/service.log"))
+        self.assertFalse(is_allowed_log_path("var/log/syslog"))
+        self.assertFalse(is_allowed_log_path("/etc/shadow"))
+
+    def test_user_facing_error_message_redacts_internal_exception_details(self):
+        error = app_commands.AppCommandError("secret backend details")
+        message = build_user_facing_error_message(error, "deadbeef")
+        self.assertIn("deadbeef", message)
+        self.assertNotIn("secret backend details", message)
 
 
 if __name__ == "__main__":

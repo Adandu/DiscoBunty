@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
 import shlex
 
 import discord
@@ -43,6 +44,19 @@ def is_admin(state: AppState):
         return check_permissions(state, interaction.user)
 
     return app_commands.check(predicate)
+
+
+def is_allowed_log_path(path: str) -> bool:
+    normalized_path = os.path.normpath(path).replace("\\", "/")
+    if not normalized_path.startswith("/"):
+        return False
+    return any(normalized_path.startswith(root) for root in ALLOWED_LOG_ROOTS)
+
+
+def build_user_facing_error_message(error: app_commands.AppCommandError, reference_id: str) -> str:
+    if isinstance(error, app_commands.CheckFailure):
+        return "❌ You do not have permission to use that command or access that server."
+    return f"❌ Command failed. Reference: {reference_id}"
 
 
 class DiscoBunty(discord.Client):
@@ -112,13 +126,9 @@ def create_bot(state: AppState) -> DiscoBunty:
 
     @bot.tree.error
     async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
-        state.logger.exception("Discord app command error: %s", error, exc_info=error)
-        if isinstance(error, app_commands.CheckFailure):
-            message = "❌ You do not have permission to use that command or access that server."
-        elif isinstance(error, app_commands.CommandInvokeError) and error.original:
-            message = f"❌ Command failed: {error.original}"
-        else:
-            message = "❌ Command failed. Check DiscoBunty logs for details."
+        reference_id = secrets.token_hex(4)
+        state.logger.exception("Discord app command error [%s]: %s", reference_id, error, exc_info=error)
+        message = build_user_facing_error_message(error, reference_id)
 
         if interaction.response.is_done():
             await interaction.followup.send(message[:1900], ephemeral=True)
@@ -252,13 +262,14 @@ def create_bot(state: AppState) -> DiscoBunty:
         ensure_server_access(interaction, server)
         await interaction.response.defer()
         real_path = await asyncio.to_thread(state.ssh_manager.resolve_remote_path, server, path)
-        normalized_path = os.path.normpath(real_path).replace("\\", "/")
-        if not any(normalized_path.startswith(root) for root in ALLOWED_LOG_ROOTS):
+        if not real_path or not is_allowed_log_path(real_path):
+            normalized_path = os.path.normpath(real_path or path).replace("\\", "/")
             await interaction.followup.send(
                 f"❌ Access denied to path: `{path}` (resolved to `{normalized_path}`)",
                 ephemeral=True,
             )
             return
+        normalized_path = os.path.normpath(real_path).replace("\\", "/")
 
         lines = min(max(1, lines), 100)
         cmd = f"sudo tail -n {lines} {shlex.quote(normalized_path)}"
