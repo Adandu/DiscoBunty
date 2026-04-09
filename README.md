@@ -6,7 +6,7 @@ Manage remote Ubuntu servers via SSH and Discord Slash Commands. Run it as a Doc
 
 ## ⚠️ Disclaimer
 
-**This bot was created 100% using AI (Gemini CLI & Claude Code).**  
+**This bot was created 100% using AI.**  
 Whoever wants to use this bot, they do so at their own risk. The authors and creators are not responsible for any damage, data loss, or security breaches resulting from the use of this software. Always review the code and test in a safe environment before deploying to production.
 
 ---

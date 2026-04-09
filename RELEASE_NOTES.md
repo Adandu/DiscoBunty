@@ -1,4 +1,4 @@
-# DiscoBunty v0.9.6
+# DiscoBunty v0.9.7
 
 ## New Features
 
@@ -6,9 +6,8 @@
 
 ## Improvements
 
-- Strengthened the dashboard form-control override so shared input sizing and corner radius are now enforced directly on the rendered input, textarea, and select elements.
+- Simplified the README disclaimer wording by removing tool-specific naming from the AI authorship statement.
 
 ## Bug Fixes
 
-- Fixed inconsistent rounded corners caused by Tailwind's forms reset overriding the WebUI field radius on some controls depending on CSS order.
-- Restored the intended rounded styling for the Add Server modal Port field and the Core Configuration inputs.
+- No application bug fixes were included in this release.
