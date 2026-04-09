@@ -22,4 +22,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Compile Python sources
-        run: python -m py_compile main.py ssh_manager.py config_manager.py crypto_utils.py auth_utils.py
+        run: python -m py_compile main.py app_state.py bot_app.py web_app.py models.py ssh_manager.py config_manager.py crypto_utils.py auth_utils.py
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v

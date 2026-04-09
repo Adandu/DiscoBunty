@@ -318,7 +318,7 @@
                         </div>
                     </div>
                     <label class="na-toggle">
-                        <input type="checkbox" id="ENABLE_DOCKER" {{ 'checked' if config.features.enable_docker == 'true' }}>
+                        <input type="checkbox" id="ENABLE_DOCKER" {{ 'checked' if config.features.enable_docker }}>
                         <span class="na-track"><span class="na-thumb"></span></span>
                     </label>
                 </div>
@@ -335,7 +335,7 @@
                         </div>
                     </div>
                     <label class="na-toggle">
-                        <input type="checkbox" id="POWER_CONTROL_ENABLED" {{ 'checked' if config.features.power_control_enabled == 'true' }}>
+                        <input type="checkbox" id="POWER_CONTROL_ENABLED" {{ 'checked' if config.features.power_control_enabled }}>
                         <span class="na-track"><span class="na-thumb"></span></span>
                     </label>
                 </div>
@@ -723,8 +723,8 @@
                 allowed_roles: document.getElementById('ALLOWED_ROLES').value
             },
             features: {
-                enable_docker: document.getElementById('ENABLE_DOCKER').checked ? 'true' : 'false',
-                power_control_enabled: document.getElementById('POWER_CONTROL_ENABLED').checked ? 'true' : 'false',
+                enable_docker: document.getElementById('ENABLE_DOCKER').checked,
+                power_control_enabled: document.getElementById('POWER_CONTROL_ENABLED').checked,
                 power_control_password: document.getElementById('POWER_CONTROL_PASSWORD').value
             },
             webui: {
@@ -747,8 +747,8 @@
             data.discord.token = document.getElementById('DISCORD_TOKEN').value;
             data.discord.guild_id = document.getElementById('GUILD_ID').value;
             data.discord.allowed_roles = document.getElementById('ALLOWED_ROLES').value;
-            data.features.enable_docker = document.getElementById('ENABLE_DOCKER').checked ? 'true' : 'false';
-            data.features.power_control_enabled = document.getElementById('POWER_CONTROL_ENABLED').checked ? 'true' : 'false';
+            data.features.enable_docker = document.getElementById('ENABLE_DOCKER').checked;
+            data.features.power_control_enabled = document.getElementById('POWER_CONTROL_ENABLED').checked;
             data.features.power_control_password = document.getElementById('POWER_CONTROL_PASSWORD').value;
             data.webui.password = document.getElementById('WEB_PASSWORD').value;
         }

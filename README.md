@@ -51,6 +51,7 @@ The bot now uses a hybrid configuration system. Initial secrets are set via envi
 **Mandatory Environment Variables (`.env`):**
 - `SECRET_KEY`: A 32+ character random string used to encrypt all local secrets. **Do not lose this.**
 - `WEBUI_ENABLED`: Set to `true` to enable the dashboard.
+- `DATA_DIR`: Directory used for `config.json`, `audit.log`, and `known_hosts`. The Docker image defaults to `/app/data`.
 
 **Recommended Security Environment Variables:**
 - `TRUSTED_PROXY_IPS`: Comma-separated IPs allowed to supply forwarded headers. Default is `127.0.0.1`.
@@ -63,6 +64,8 @@ Once the container is running, navigate to `http://<your-ip>:8000` to configure 
 ```bash
 docker-compose up -d
 ```
+
+Persistent runtime data now lives in `./data` when using the provided Compose file.
 
 ---
 
@@ -91,6 +94,13 @@ botuser ALL=(ALL) NOPASSWD: /usr/sbin/reboot, /usr/sbin/shutdown
 ### Password Storage
 - The WebUI login password and power-control confirmation password are now stored as one-way password hashes when saved to `config.json`.
 - `SECRET_KEY` rotation is intentionally not supported from the WebUI because changing it without a coordinated re-encryption step can break existing encrypted settings.
+
+## ✅ Validation
+
+The repository now includes:
+- `python -m py_compile` smoke validation
+- unit tests for auth hashing, config migration, and WebUI login flow
+- GitHub Actions for both validation and Docker image publishing
 
 ---
 

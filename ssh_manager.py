@@ -40,7 +40,7 @@ class SSHManager:
         auth_method = config.get('auth_method', 'key')
 
         client = paramiko.SSHClient()
-        known_hosts_path = os.getenv('KNOWN_HOSTS_FILE', '/app/.ssh/known_hosts')
+        known_hosts_path = os.getenv('KNOWN_HOSTS_FILE', os.path.join(os.getenv('DATA_DIR', '/app/data'), 'known_hosts'))
         
         # 1. Fingerprint Capture Policy
         class FingerprintCapturePolicy(paramiko.MissingHostKeyPolicy):

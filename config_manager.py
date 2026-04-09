@@ -2,8 +2,10 @@ import os
 import json
 import logging
 import copy
+from pathlib import Path
 from auth_utils import hash_password, is_password_hash
 from crypto_utils import CryptoManager
+from models import AppConfig
 
 logger = logging.getLogger('discobunty.config')
 
@@ -14,20 +16,22 @@ DEFAULT_CONFIG = {
         "allowed_roles": "Admin,DevOps"
     },
     "features": {
-        "enable_docker": "false",
-        "power_control_enabled": "false",
+        "enable_docker": False,
+        "power_control_enabled": False,
         "power_control_password": ""
     },
     "webui": {
-        "enabled": "true",
+        "enabled": True,
         "password": ""
     },
     "servers": []
 }
 
 class ConfigManager:
-    def __init__(self, config_path: str = "config.json"):
-        self.config_path = config_path
+    def __init__(self, config_path: str | None = None):
+        data_dir = Path(os.getenv("DATA_DIR", "data"))
+        data_dir.mkdir(parents=True, exist_ok=True)
+        self.config_path = Path(config_path) if config_path else data_dir / "config.json"
         # SECRET_KEY must still come from environment for initial decryption
         secret_key = os.getenv('SECRET_KEY')
         if not secret_key:
@@ -36,23 +40,23 @@ class ConfigManager:
         self.crypto = CryptoManager(secret_key)
         self.config = self._load_config()
 
-    def _load_config(self) -> dict:
+    def _load_config(self) -> AppConfig:
         if os.path.exists(self.config_path):
             try:
-                with open(self.config_path, 'r') as f:
+                with open(self.config_path, 'r', encoding='utf-8') as f:
                     config = json.load(f)
                     logger.info(f"Loaded configuration from {self.config_path}")
                     config = self._process_config(config, decrypt=True)
                     if self._migrate_password_hashes(config):
-                        self.save_config(config)
-                    return config
+                        self.save_config(AppConfig.model_validate(config))
+                    return AppConfig.model_validate(config)
             except Exception as e:
                 logger.error(f"Failed to load config.json: {e}")
         
         logger.warning("Config file not found or invalid. Using defaults/env migration.")
         return self._migrate_from_env()
 
-    def _migrate_from_env(self) -> dict:
+    def _migrate_from_env(self) -> AppConfig:
         """Helper to migrate existing .env settings to the new JSON format."""
         # Use deepcopy to avoid mutating the global DEFAULT_CONFIG
         config = copy.deepcopy(DEFAULT_CONFIG)
@@ -62,11 +66,11 @@ class ConfigManager:
         config["discord"]["guild_id"] = os.getenv('GUILD_ID', '')
         config["discord"]["allowed_roles"] = os.getenv('ALLOWED_ROLES', '')
         
-        config["features"]["enable_docker"] = os.getenv('ENABLE_DOCKER', 'false').lower()
-        config["features"]["power_control_enabled"] = os.getenv('POWER_CONTROL_ENABLED', 'false').lower()
+        config["features"]["enable_docker"] = os.getenv('ENABLE_DOCKER', 'false').lower() == 'true'
+        config["features"]["power_control_enabled"] = os.getenv('POWER_CONTROL_ENABLED', 'false').lower() == 'true'
         config["features"]["power_control_password"] = os.getenv('POWER_CONTROL_PASSWORD', '')
         
-        config["webui"]["enabled"] = os.getenv('WEBUI_ENABLED', 'true').lower()
+        config["webui"]["enabled"] = os.getenv('WEBUI_ENABLED', 'true').lower() == 'true'
         config["webui"]["password"] = os.getenv('WEB_PASSWORD', '')
         
         # Servers migration
@@ -88,9 +92,11 @@ class ConfigManager:
             i += 1
             
         # Save the migrated config (will encrypt automatically in save_config)
-        self.config = config
-        self.save_config(config)
-        return config
+        self._migrate_password_hashes(config)
+        typed_config = AppConfig.model_validate(config)
+        self.config = typed_config
+        self.save_config(typed_config)
+        return typed_config
 
     def _process_config(self, config: dict, decrypt: bool = True) -> dict:
         """Recursively encrypt or decrypt passwords in the config."""
@@ -142,19 +148,23 @@ class ConfigManager:
 
         return changed
 
-    def save_config(self, new_config: dict):
+    def save_config(self, new_config: AppConfig):
         """Save configuration to JSON file with encryption."""
+        runtime_config = copy.deepcopy(new_config.model_dump(by_alias=True))
+        self._migrate_password_hashes(runtime_config)
+        typed_runtime_config = AppConfig.model_validate(runtime_config)
+
         # Deep copy to avoid encrypting the in-memory config
-        to_save = copy.deepcopy(new_config)
+        to_save = copy.deepcopy(typed_runtime_config.model_dump(by_alias=True))
         to_save = self._process_config(to_save, decrypt=False)
         
         try:
-            with open(self.config_path, 'w') as f:
+            with open(self.config_path, 'w', encoding='utf-8') as f:
                 json.dump(to_save, f, indent=4)
-            self.config = new_config # Update in-memory config
+            self.config = typed_runtime_config # Update in-memory config
             logger.info(f"Saved configuration to {self.config_path}")
         except Exception as e:
             logger.error(f"Failed to save {self.config_path}: {e}")
 
-    def get_server_config(self) -> list:
-        return self.config.get("servers", [])
+    def get_server_config(self) -> list[dict]:
+        return [server.model_dump(by_alias=True) for server in self.config.servers]

@@ -26,13 +26,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    DATA_DIR=/app/data \
+    KNOWN_HOSTS_FILE=/app/data/known_hosts
 
 WORKDIR /app
 
 # Create a non-root user
 RUN groupadd -g 10001 botgroup && \
-    useradd -u 10001 -g botgroup -m -s /bin/bash botuser
+    useradd -u 10001 -g botgroup -m -s /bin/bash botuser && \
+    mkdir -p /app/data && \
+    chown -R botuser:botgroup /app/data
 
 # Copy installed packages from builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/

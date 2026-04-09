@@ -15,8 +15,7 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./ssh_keys:/app/ssh_keys:ro
-      - ./.ssh:/app/.ssh
-      - ./config.json:/app/config.json
+      - ./data:/app/data
     env_file:
       - .env
     environment:
