@@ -22,6 +22,7 @@ from models import AppConfig, RestoreConfigResponse, SaveConfigRequest, SetupReq
 def create_web_app(state: AppState) -> FastAPI:
     app = FastAPI(title="DiscoBunty Dashboard")
     secret_key = os.getenv("SECRET_KEY")
+    observability_refresh_ms = max(5000, int(os.getenv("OBSERVABILITY_REFRESH_MS", "30000")))
     if not secret_key:
         raise ValueError("SECRET_KEY environment variable is mandatory for WebUI session security.")
 
@@ -99,6 +100,7 @@ def create_web_app(state: AppState) -> FastAPI:
                 "config": display_config,
                 "servers": display_config["servers"],
                 "csrf_token": get_csrf_token(request),
+                "observability_refresh_ms": observability_refresh_ms,
             },
         )
 

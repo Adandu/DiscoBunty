@@ -14,6 +14,10 @@ Whoever wants to use this bot, they do so at their own risk. The authors and cre
 ## 🚀 Features
 
 - **Web Control Panel (NEW):** Securely manage your bot configuration, servers, and view live application logs from a single-page dashboard.
+- **First-Run Setup:** Brand-new installs can bootstrap the WebUI password from the browser before normal login is enabled.
+- **Fleet Overview:** Read-only observability cards surface CPU, RAM, disk, uptime, Docker container count, and last backup age per server.
+- **Backup & Restore:** Export the current configuration for safekeeping and restore it from the WebUI when needed.
+- **Audit Trail:** Review recent administrative activity from the dashboard.
 - **Encrypted Configuration:** All sensitive data (Discord tokens, SSH passwords, keys) is stored encrypted in `config.json` using a master `SECRET_KEY`.
 - **Connectivity Testing:** Integrated "Test Connection" button in the WebUI to verify SSH credentials before saving.
 - **Multi-Server Support:** Manage an unlimited number of Ubuntu servers from a single bot.
@@ -57,8 +61,19 @@ The bot now uses a hybrid configuration system. Initial secrets are set via envi
 - `TRUSTED_PROXY_IPS`: Comma-separated IPs allowed to supply forwarded headers. Default is `127.0.0.1`.
 - `WEBUI_SECURE_COOKIES`: Set to `true` when the WebUI is served over HTTPS via a reverse proxy.
 
+**Optional Runtime Environment Variables:**
+- `OBSERVABILITY_REFRESH_MS`: Refresh interval for the dashboard observability cards in milliseconds. Default is `30000` and values below `5000` are clamped.
+
 **WebUI Access:**
 Once the container is running, navigate to `http://<your-ip>:8000` to configure your bot token and servers.
+
+### 2.1 Server Fields in the WebUI
+Each configured server supports a few optional fields beyond the SSH basics:
+
+- `allowed_roles`: Comma-separated Discord role names that are allowed to manage that specific server. Leave blank to fall back to the global `ALLOWED_ROLES` behavior.
+- `backup_path`: Absolute path on the remote host that DiscoBunty should inspect when calculating "Last Backup Age" for observability.
+
+If `backup_path` points to a file, DiscoBunty uses that file's modified time. If it points to a directory, DiscoBunty inspects the newest file inside it. The dashboard formats the age into friendly text such as `3h 12m` or `2d 4h`.
 
 ### 3. Run with Docker
 ```bash
@@ -99,7 +114,7 @@ botuser ALL=(ALL) NOPASSWD: /usr/sbin/reboot, /usr/sbin/shutdown
 
 The repository now includes:
 - `python -m py_compile` smoke validation
-- unit tests for auth hashing, config migration, and WebUI login flow
+- unit tests for auth hashing, config migration, WebUI flows, and Discord permission behavior
 - GitHub Actions for both validation and Docker image publishing
 
 ---

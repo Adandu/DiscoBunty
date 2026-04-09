@@ -9,6 +9,39 @@ from typing import List, Dict, Optional, Tuple
 
 logger = logging.getLogger('discobunty.ssh')
 
+
+def _humanize_age_seconds(raw_value: str) -> str:
+    raw_value = (raw_value or "").strip()
+    if not raw_value or raw_value == "n/a":
+        return "n/a"
+    if raw_value.endswith("s"):
+        raw_value = raw_value[:-1]
+    try:
+        total_seconds = int(float(raw_value))
+    except ValueError:
+        return raw_value
+
+    if total_seconds < 60:
+        return f"{total_seconds}s"
+
+    units = (
+        ("d", 86400),
+        ("h", 3600),
+        ("m", 60),
+    )
+    parts = []
+    remainder = total_seconds
+    for suffix, size in units:
+        if remainder >= size:
+            value = remainder // size
+            remainder %= size
+            parts.append(f"{value}{suffix}")
+        if len(parts) == 2:
+            break
+    if not parts:
+        parts.append(f"{remainder}s")
+    return " ".join(parts)
+
 class SSHManager:
     def __init__(self, servers: List[Dict]):
         # Now initialized with the list from ConfigManager
@@ -301,6 +334,7 @@ class SSHManager:
             key, value = line.split("=", 1)
             if key in metrics:
                 metrics[key] = value.strip() or "n/a"
+        metrics["last_backup_age"] = _humanize_age_seconds(metrics["last_backup_age"])
         return metrics
 
     def check_server_capabilities(self, alias: str, backup_path: str = "", include_docker: bool = False) -> Dict[str, str]:
