@@ -124,19 +124,16 @@ class ConfigManager:
             config["discord"]["token"] = self.crypto.decrypt(t) if decrypt else self.crypto.encrypt(t)
 
         # Process top-level passwords
-        if "features" in config and config["features"].get("power_control_password"):
-            p = config["features"]["power_control_password"]
-            if decrypt:
-                config["features"]["power_control_password"] = self.crypto.decrypt(p)
-            else:
-                config["features"]["power_control_password"] = hash_password(self.crypto.decrypt(p) if p.startswith("ENC:") else p)
-            
-        if "webui" in config and config["webui"].get("password"):
-            p = config["webui"]["password"]
-            if decrypt:
-                config["webui"]["password"] = self.crypto.decrypt(p)
-            else:
-                config["webui"]["password"] = hash_password(self.crypto.decrypt(p) if p.startswith("ENC:") else p)
+        def _process_section_password(section: str, key: str):
+            if section in config and config[section].get(key):
+                p = config[section][key]
+                if decrypt:
+                    config[section][key] = self.crypto.decrypt(p)
+                else:
+                    config[section][key] = hash_password(self.crypto.decrypt(p) if p.startswith("ENC:") else p)
+
+        _process_section_password("features", "power_control_password")
+        _process_section_password("webui", "password")
 
         # Process server passwords/keys
         if "servers" in config:
