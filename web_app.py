@@ -19,6 +19,15 @@ from auth_utils import verify_password
 from models import AppConfig, RestoreConfigResponse, SaveConfigRequest, TestServerRequest
 
 
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else "unknown"
+
 def create_web_app(state: AppState) -> FastAPI:
     app = FastAPI(title="DiscoBunty Dashboard")
     secret_key = os.getenv("SECRET_KEY")
@@ -39,8 +48,6 @@ def create_web_app(state: AppState) -> FastAPI:
     templates = Jinja2Templates(directory=str(base_dir / "templates"))
     app.mount("/static", StaticFiles(directory=str(base_dir / "static")), name="static")
 
-    def get_client_ip(request: Request) -> str:
-        return request.client.host if request.client else "unknown"
 
     def is_authenticated(request: Request) -> bool:
         return bool(state.config.webui.password) and request.session.get("authenticated") is True
