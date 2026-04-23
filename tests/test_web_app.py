@@ -110,5 +110,52 @@ class WebAppTests(unittest.TestCase):
             temp_dir.cleanup()
 
 
+class TestGetClientIp(unittest.TestCase):
+    def test_x_forwarded_for(self):
+        from fastapi import Request
+        from web_app import get_client_ip
+        scope = {
+            "type": "http",
+            "headers": [
+                (b"x-forwarded-for", b"192.168.1.1, 10.0.0.1"),
+                (b"x-real-ip", b"10.0.0.1"),
+            ]
+        }
+        request = Request(scope)
+        self.assertEqual(get_client_ip(request), "192.168.1.1")
+
+    def test_x_real_ip(self):
+        from fastapi import Request
+        from web_app import get_client_ip
+        scope = {
+            "type": "http",
+            "headers": [
+                (b"x-real-ip", b"10.0.0.1"),
+            ]
+        }
+        request = Request(scope)
+        self.assertEqual(get_client_ip(request), "10.0.0.1")
+
+    def test_client_host_fallback(self):
+        from fastapi import Request
+        from web_app import get_client_ip
+        scope = {
+            "type": "http",
+            "headers": [],
+            "client": ("172.16.0.1", 8080)
+        }
+        request = Request(scope)
+        self.assertEqual(get_client_ip(request), "172.16.0.1")
+
+    def test_missing_client(self):
+        from fastapi import Request
+        from web_app import get_client_ip
+        scope = {
+            "type": "http",
+            "headers": [],
+        }
+        request = Request(scope)
+        self.assertEqual(get_client_ip(request), "unknown")
+
 if __name__ == "__main__":
     unittest.main()
