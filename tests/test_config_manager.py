@@ -79,6 +79,45 @@ class ConfigManagerTests(unittest.TestCase):
             migrated = json.loads((data_dir / "config.json").read_text(encoding="utf-8"))
             self.assertTrue(migrated["webui"]["password"].startswith("PBKDF2_SHA256$"))
 
+    def test_export_raw_config_returns_file_bytes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_file = Path(temp_dir) / "config.json"
+            env = {"SECRET_KEY": "x" * 32, "DATA_DIR": temp_dir}
+            with patch.dict(os.environ, env, clear=False):
+                manager = ConfigManager()
+
+                # Write some distinct bytes directly to the file
+                test_bytes = b'{"custom": "data", "id": 12345}'
+                config_file.write_bytes(test_bytes)
+
+                # export_raw_config should return the exact bytes from the file
+                exported = manager.export_raw_config()
+                self.assertEqual(exported, test_bytes)
+
+    def test_export_raw_config_creates_file_if_missing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_file = Path(temp_dir) / "config.json"
+            env = {"SECRET_KEY": "x" * 32, "DATA_DIR": temp_dir}
+            with patch.dict(os.environ, env, clear=False):
+                manager = ConfigManager()
+
+                # The file is created during ConfigManager init (save_config via migrate_from_env)
+                self.assertTrue(config_file.exists())
+
+                # Delete the file
+                config_file.unlink()
+                self.assertFalse(config_file.exists())
+
+                # Exporting should recreate it and return its new bytes
+                exported = manager.export_raw_config()
+                self.assertTrue(config_file.exists())
+                self.assertEqual(exported, config_file.read_bytes())
+
+                # Verify it contains valid JSON and expected structure
+                exported_data = json.loads(exported)
+                self.assertIn("features", exported_data)
+                self.assertIn("webui", exported_data)
+
 
 if __name__ == "__main__":
     unittest.main()
