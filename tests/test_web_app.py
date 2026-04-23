@@ -202,6 +202,217 @@ class WebAppTests(unittest.TestCase):
             temp_dir.cleanup()
 
 
+
+    def test_test_server_unauthenticated(self):
+        temp_dir, patcher, client, _state = self._build_client()
+        try:
+            response = client.post(
+                "/api/test-server",
+                json={"alias": "test_server", "host": "localhost", "user": "root", "port": 22, "auth_method": "password", "password": "pass"}
+            )
+            self.assertEqual(response.status_code, 401)
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
+    @patch("ssh_manager.SSHManager.test_server_connection")
+    def test_test_server_authenticated_success(self, mock_test_conn):
+        temp_dir, patcher, client, state = self._build_client()
+        try:
+            # Login first
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+            home = client.get("/")
+            authed_csrf = home.text.split('meta name="csrf-token" content="', 1)[1].split('"', 1)[0]
+
+            mock_test_conn.return_value = (True, "Connection successful", "fingerprint123")
+
+            payload = {
+                "alias": "new_server",
+                "host": "127.0.0.1",
+                "user": "admin",
+                "port": 2222,
+                "auth_method": "password",
+                "password": "secret_password",
+                "trust_host": True
+            }
+
+            response = client.post(
+                "/api/test-server",
+                headers={"X-CSRF-Token": authed_csrf},
+                json=payload
+            )
+
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertEqual(data["success"], True)
+            self.assertEqual(data["message"], "Connection successful")
+            self.assertEqual(data["fingerprint"], "fingerprint123")
+
+            mock_test_conn.assert_called_once()
+            call_args = mock_test_conn.call_args[0]
+            self.assertEqual(call_args[0]["alias"], "new_server")
+            self.assertEqual(call_args[0]["host"], "127.0.0.1")
+            self.assertEqual(call_args[0]["user"], "admin")
+            self.assertEqual(call_args[0]["port"], 2222)
+            self.assertEqual(call_args[0]["auth_method"], "password")
+            self.assertEqual(call_args[0]["password"], "secret_password")
+            self.assertEqual(call_args[1], True) # trust_host
+
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
+    @patch("ssh_manager.SSHManager.test_server_connection")
+    def test_test_server_obfuscated_credentials(self, mock_test_conn):
+        temp_dir, patcher, client, state = self._build_client()
+        try:
+            # Add an existing server to config
+            from models import AppConfig, ServerSettings
+            config = AppConfig.model_validate(state.config.model_dump())
+            config.servers.append(ServerSettings(
+                alias="existing_server",
+                host="10.0.0.1",
+                user="root",
+                port=22,
+                auth_method="password",
+                password="real_password"
+            ))
+            config.servers.append(ServerSettings(
+                alias="existing_key_server",
+                host="10.0.0.2",
+                user="root",
+                port=22,
+                auth_method="key",
+                key="real_key"
+            ))
+            state.save_config(config)
+
+            # Login
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+            home = client.get("/")
+            authed_csrf = home.text.split('meta name="csrf-token" content="', 1)[1].split('"', 1)[0]
+
+            mock_test_conn.return_value = (True, "OK", "fp")
+
+            # Test password obfuscation
+            payload_pwd = {
+                "alias": "existing_server",
+                "host": "10.0.0.1",
+                "user": "root",
+                "port": 22,
+                "auth_method": "password",
+                "password": "********",
+                "trust_host": False
+            }
+
+            response_pwd = client.post(
+                "/api/test-server",
+                headers={"X-CSRF-Token": authed_csrf},
+                json=payload_pwd
+            )
+
+            self.assertEqual(response_pwd.status_code, 200)
+            mock_test_conn.assert_called_once()
+            call_args_pwd = mock_test_conn.call_args[0]
+            self.assertEqual(call_args_pwd[0]["password"], "real_password")
+            self.assertEqual(call_args_pwd[0]["host"], "10.0.0.1")
+
+            mock_test_conn.reset_mock()
+
+            # Test key obfuscation
+            payload_key = {
+                "alias": "existing_key_server",
+                "host": "10.0.0.2",
+                "user": "root",
+                "port": 22,
+                "auth_method": "key",
+                "key": "********",
+                "trust_host": False
+            }
+
+            response_key = client.post(
+                "/api/test-server",
+                headers={"X-CSRF-Token": authed_csrf},
+                json=payload_key
+            )
+
+            self.assertEqual(response_key.status_code, 200)
+            mock_test_conn.assert_called_once()
+            call_args_key = mock_test_conn.call_args[0]
+            self.assertEqual(call_args_key[0]["key"], "real_key")
+
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
+    @patch("ssh_manager.SSHManager.test_server_connection")
+    def test_test_server_rate_limit(self, mock_test_conn):
+        temp_dir, patcher, client, state = self._build_client()
+        try:
+            # Login
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+            home = client.get("/")
+            authed_csrf = home.text.split('meta name="csrf-token" content="', 1)[1].split('"', 1)[0]
+
+            mock_test_conn.return_value = (True, "OK", "fp")
+
+            payload = {
+                "alias": "test_limit",
+                "host": "localhost",
+                "user": "root",
+                "port": 22,
+                "auth_method": "password",
+                "password": "pass",
+                "trust_host": False
+            }
+
+            state.api_limiter.max_attempts = 3
+
+            # Fire off limit requests
+            limit = state.api_limiter.max_attempts
+            for _ in range(limit):
+                resp = client.post(
+                    "/api/test-server",
+                    headers={"X-CSRF-Token": authed_csrf},
+                    json=payload
+                )
+                self.assertEqual(resp.status_code, 200)
+
+            # The next one should fail with 429
+            resp = client.post(
+                "/api/test-server",
+                headers={"X-CSRF-Token": authed_csrf},
+                json=payload
+            )
+            self.assertEqual(resp.status_code, 429)
+            self.assertEqual(resp.json()["detail"], "Too many requests. Please wait before testing again.")
+
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
 class TestGetClientIp(unittest.TestCase):
     def test_x_forwarded_for(self):
         from fastapi import Request
