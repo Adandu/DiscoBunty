@@ -1,14 +1,16 @@
+import base64
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import os
 import logging
-from cryptography.fernet import Fernet, InvalidToken
-import base64
 import hashlib
 
 logger = logging.getLogger('discobunty.crypto')
 
 # Fixed application salt — not secret, just prevents generic rainbow tables.
+APP_SALT = b'bunty_static_salt_2024'
 # Changing this invalidates all existing encrypted config values.
-_APP_SALT = b"discobunty-v2-config-salt-2024"
 _PBKDF2_ITERATIONS = 100_000
 
 
@@ -20,9 +22,13 @@ class CryptoManager:
             raise ValueError(msg)
 
         # Primary key: PBKDF2-derived (100k iterations — resistant to brute-force)
-        key_bytes = hashlib.pbkdf2_hmac(
-            'sha256', secret_key.encode(), _APP_SALT, _PBKDF2_ITERATIONS, dklen=32
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=APP_SALT,
+            iterations=_PBKDF2_ITERATIONS,
         )
+        key_bytes = kdf.derive(secret_key.encode())
         self.fernet = Fernet(base64.urlsafe_b64encode(key_bytes))
 
         # Legacy key: SHA256-derived — only used to decrypt values encrypted before v2.
