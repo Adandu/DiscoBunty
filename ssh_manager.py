@@ -356,22 +356,23 @@ class SSHManager:
         return metrics
 
     def _build_capabilities_command(self, backup_path: str, include_docker: bool) -> str:
-        # Batch checks into a single command to avoid N+1 SSH connections
-        command = "echo '---RESULTS---';"
+        # Batch checks into a single sudo command so execute_command can feed
+        # the configured password for non-root SSH users.
+        probe = "echo '---RESULTS---';"
 
         # Check sudo
-        command += " if sudo -n true 2>&1 | grep -q -e 'not allowed' -e 'password is required'; then echo 'sudo_status=fail'; else echo 'sudo_status=ok'; fi;"
+        probe += " echo 'sudo_status=ok';"
 
         # Check docker
         if include_docker:
-            command += " if command -v docker >/dev/null 2>&1 && sudo docker ps -q >/dev/null 2>&1; then echo 'docker_status=ok'; else echo 'docker_status=fail'; fi;"
+            probe += " if command -v docker >/dev/null 2>&1 && docker ps -q >/dev/null 2>&1; then echo 'docker_status=ok'; else echo 'docker_status=fail'; fi;"
 
         # Check backup path
         if backup_path:
             safe_path = shlex.quote(backup_path)
-            command += f" if test -e {safe_path}; then echo 'backup_status=ok'; else echo 'backup_status=missing'; fi;"
+            probe += f" if test -e {safe_path}; then echo 'backup_status=ok'; else echo 'backup_status=missing'; fi;"
 
-        return command
+        return f"sudo sh -c {shlex.quote(probe)}"
 
     def _parse_capabilities_output(self, output: str, status: Dict[str, str]) -> None:
         lines = output.split('\n')
