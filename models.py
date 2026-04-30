@@ -23,6 +23,7 @@ class FeatureSettings(BaseModel):
     enable_docker: bool = False
     power_control_enabled: bool = False
     power_control_password: str = ""
+    allowed_containers: str = ""
 
     @field_validator("enable_docker", "power_control_enabled", mode="before")
     @classmethod
@@ -51,6 +52,7 @@ class ServerSettings(BaseModel):
     password: str = ""
     key: str = ""
     allowed_roles: str = ""
+    allowed_containers: str = ""
     backup_path: str = ""
     original_alias: str | None = Field(default=None, alias="_original_alias")
 

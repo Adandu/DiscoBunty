@@ -322,6 +322,24 @@ class DockerGroup(app_commands.Group, name="docker", description="Manage Docker 
     ])
     async def docker_control(self, interaction: discord.Interaction, server: str, action: str, container: str) -> None:
         self.ensure_server_access(interaction, server)
+
+        # Security check: Enforce default-deny policy for container control
+        server_config = next((s for s in self.state.config.servers if s.alias == server), None)
+        allowed_list = ""
+        if server_config and server_config.allowed_containers.strip():
+            allowed_list = server_config.allowed_containers
+        elif self.state.config.features.allowed_containers.strip():
+            allowed_list = self.state.config.features.allowed_containers
+
+        allowed_containers = [c.strip() for c in allowed_list.split(",") if c.strip()]
+
+        if not allowed_containers or container not in allowed_containers:
+            await interaction.response.send_message(
+                f"❌ Execution denied. Container `{container}` is not in the allowlist for `{server}`.",
+                ephemeral=True
+            )
+            return
+
         await interaction.response.defer()
         self.state.audit_log(
             interaction.user.id,

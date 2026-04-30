@@ -1,3 +1,5 @@
+import discord
+from unittest.mock import AsyncMock, patch, MagicMock
 import unittest
 from types import SimpleNamespace
 
@@ -78,3 +80,56 @@ class BotPermissionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestBotApp_Allowlist(unittest.IsolatedAsyncioTestCase):
+
+    @patch("bot_app.asyncio.to_thread", new_callable=AsyncMock)
+    async def test_docker_control_allowlist(self, mock_to_thread):
+        state = MagicMock()
+        state.config.servers = [
+            MagicMock(alias="server1", allowed_containers="nginx, db"),
+            MagicMock(alias="server2", allowed_containers=""),
+        ]
+        state.config.features.allowed_containers = "global_redis, global_api"
+
+        from bot_app import DiscoBunty
+        bot = DiscoBunty(state)
+
+        # We need to test the docker_control command
+        from bot_app import DockerGroup
+        docker_group = DockerGroup(bot)
+
+
+        # Test 1: Allowed container on server1
+        interaction = AsyncMock(spec=discord.Interaction)
+        interaction.user.id = 123
+        interaction.user.name = "testuser"
+        interaction.response = AsyncMock()
+        interaction.followup = AsyncMock()
+
+        # Mock ensure_server_access to pass
+        docker_group.ensure_server_access = MagicMock()
+
+        mock_to_thread.return_value = "started"
+
+        await docker_group.docker_control.callback(docker_group, interaction, "server1", "start", "nginx")
+        interaction.response.send_message.assert_not_called()
+        interaction.response.defer.assert_awaited_once()
+
+        # Test 2: Denied container on server1
+        interaction.reset_mock()
+        await docker_group.docker_control.callback(docker_group, interaction, "server1", "start", "hacked_container")
+        interaction.response.send_message.assert_awaited_once()
+        self.assertIn("Execution denied", interaction.response.send_message.call_args[0][0])
+
+        # Test 3: Fallback to global config on server2, allowed
+        interaction.reset_mock()
+        await docker_group.docker_control.callback(docker_group, interaction, "server2", "start", "global_redis")
+        interaction.response.send_message.assert_not_called()
+        interaction.response.defer.assert_awaited_once()
+
+        # Test 4: Fallback to global config on server2, denied
+        interaction.reset_mock()
+        await docker_group.docker_control.callback(docker_group, interaction, "server2", "start", "nginx")
+        interaction.response.send_message.assert_awaited_once()
+        self.assertIn("Execution denied", interaction.response.send_message.call_args[0][0])
