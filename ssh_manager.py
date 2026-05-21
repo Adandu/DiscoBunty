@@ -65,6 +65,12 @@ class SSHManager:
         self.servers_by_alias = {s['alias']: s for s in servers}
         self._log_cache = {} # Cache for log file lists: {alias: (timestamp, [files])}
 
+    def update_servers(self, servers: List[Dict]) -> None:
+        """Update the configured servers without destroying internal caches."""
+        self.servers = servers
+        self.servers_by_alias = {s['alias']: s for s in servers}
+
+
     def get_server_aliases(self) -> List[str]:
         """Return a list of all server aliases for autocomplete."""
         return [s['alias'] for s in self.servers]
