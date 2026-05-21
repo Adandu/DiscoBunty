@@ -66,6 +66,28 @@ class BotPermissionTests(unittest.TestCase):
         self.assertFalse(is_allowed_log_path("var/log/syslog"))
         self.assertFalse(is_allowed_log_path("/etc/shadow"))
 
+    def test_log_path_validation_boundary_cases(self):
+        # Traversal attacks
+        self.assertFalse(is_allowed_log_path("/var/log/../../etc/shadow"))
+        self.assertFalse(is_allowed_log_path("/var/log/..\\..\\etc\\shadow"))
+        self.assertFalse(is_allowed_log_path("/var/log/..\\../etc/shadow"))
+
+        # Partial directory matches
+        self.assertFalse(is_allowed_log_path("/var/logdir"))
+        self.assertFalse(is_allowed_log_path("/home_user"))
+
+        # Exact matches with and without trailing slash
+        self.assertTrue(is_allowed_log_path("/var/log"))
+        self.assertTrue(is_allowed_log_path("/var/log/"))
+        self.assertTrue(is_allowed_log_path("/home"))
+        self.assertTrue(is_allowed_log_path("/home/"))
+
+        # Relative paths
+        self.assertFalse(is_allowed_log_path("var/log"))
+        self.assertFalse(is_allowed_log_path("../var/log"))
+        self.assertFalse(is_allowed_log_path("./var/log"))
+
+
     def test_user_facing_error_message_redacts_internal_exception_details(self):
         error = app_commands.AppCommandError("secret backend details")
         message = build_user_facing_error_message(error, "deadbeef")
