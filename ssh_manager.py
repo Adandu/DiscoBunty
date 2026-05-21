@@ -114,8 +114,12 @@ class SSHManager:
 
         return True, known_hosts_path, capture_policy
 
-    def _connect_client(self, client: paramiko.SSHClient, config: Dict, host: str, port: int, user: str) -> Optional[str]:
+    def _connect_client(self, client: paramiko.SSHClient, config: Dict) -> Optional[str]:
         """Handle SSH authentication and connection."""
+        host = config.get('host')
+        user = config.get('user', 'root')
+        port = int(config.get('port', 22))
+
         auth_method = config.get('auth_method', 'key')
 
         if auth_method == 'key':
@@ -130,8 +134,10 @@ class SSHManager:
                 for key_class in [paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey]:
                     try:
                         private_key = key_class.from_private_key(io.StringIO(key_value))
-                        if private_key: break
-                    except Exception: continue
+                        if private_key:
+                            break
+                    except Exception:
+                        continue
 
                 if not private_key:
                     return "Error: Could not parse SSH key string."
@@ -154,7 +160,6 @@ class SSHManager:
             return None, "Error: Invalid server configuration.", None
 
         host = config.get('host')
-        user = config.get('user', 'root')
         port = int(config.get('port', 22))
 
         client = paramiko.SSHClient()
@@ -169,7 +174,7 @@ class SSHManager:
 
         try:
             # Connect
-            err = self._connect_client(client, config, host, port, user)
+            err = self._connect_client(client, config)
             if err:
                 client.close()
                 return None, err, None
