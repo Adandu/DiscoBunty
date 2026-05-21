@@ -530,7 +530,7 @@ def create_web_app(state: AppState) -> FastAPI:
         secret_key=secret_key,
         session_cookie="session",
         same_site="strict",
-        https_only=os.getenv("WEBUI_SECURE_COOKIES", "false").lower() == "true",
+        https_only=os.getenv("WEBUI_SECURE_COOKIES", "true").lower() == "true",
         max_age=3600,
     )
 
