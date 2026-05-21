@@ -46,10 +46,12 @@ def is_admin(state: AppState):
 
 
 def is_allowed_log_path(path: str) -> bool:
-    normalized_path = os.path.normpath(path).replace("\\", "/")
+    normalized_path = os.path.normpath(path.replace("\\", "/"))
     if not normalized_path.startswith("/"):
         return False
-    return any(normalized_path.startswith(root) for root in ALLOWED_LOG_ROOTS)
+
+    check_path = normalized_path if normalized_path.endswith("/") else normalized_path + "/"
+    return any(check_path.startswith(root) for root in ALLOWED_LOG_ROOTS)
 
 
 def build_user_facing_error_message(error: app_commands.AppCommandError, reference_id: str) -> str:
