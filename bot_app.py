@@ -16,10 +16,10 @@ def _role_names(user) -> list[str]:
 
 
 def _matches_roles(user_roles: list[str], allowed_roles_str: str) -> bool:
-    allowed_roles = [role.strip() for role in allowed_roles_str.split(",") if role.strip()]
+    allowed_roles = {role.strip() for role in allowed_roles_str.split(",") if role.strip()}
     if not allowed_roles:
         return False
-    return any(role in allowed_roles for role in user_roles)
+    return not allowed_roles.isdisjoint(user_roles)
 
 
 def check_permissions(state: AppState, user, server_alias: str | None = None) -> bool:
