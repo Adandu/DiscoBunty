@@ -8,8 +8,8 @@ import hashlib
 
 logger = logging.getLogger('discobunty.crypto')
 
-# Fixed application salt — not secret, just prevents generic rainbow tables.
-APP_SALT = b'bunty_static_salt_2024'
+# Application salt — configurable via env var to prevent generic rainbow tables.
+APP_SALT = os.environ.get("APP_SALT", "bunty_static_salt_2024").encode()
 # Changing this invalidates all existing encrypted config values.
 _PBKDF2_ITERATIONS = 100_000
 
