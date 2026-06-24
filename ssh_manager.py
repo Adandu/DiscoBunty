@@ -297,8 +297,6 @@ class SSHManager:
         containers = [name.strip() for name in output.split('\n') if name.strip()]
         return containers
 
-    def execute_probe(self, config: Dict, command: str) -> str:
-        return self._execute_command_on_config(config, command)
 
     def get_observability(self, alias: str, backup_path: str = "", include_docker: bool = False) -> Dict[str, str]:
         metrics = {
