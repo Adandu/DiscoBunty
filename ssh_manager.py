@@ -152,6 +152,49 @@ class SSHManager:
 
         return None
 
+    def _get_pooled_client(self, alias: Optional[str]) -> Optional[paramiko.SSHClient]:
+        if not alias or alias not in self._client_pool:
+            return None
+        client = self._client_pool[alias]
+        transport = client.get_transport()
+        if transport and transport.is_active():
+            return client
+        try:
+            client.close()
+        except Exception:
+            pass
+        del self._client_pool[alias]
+        return None
+
+    def _save_host_keys_if_trusted(self, client: paramiko.SSHClient, host: str, known_hosts_path: str, trust_host: bool) -> Optional[str]:
+        if not trust_host:
+            return None
+        try:
+            client.save_host_keys(known_hosts_path)
+            logger.info(f"Successfully added and saved host key for {host} to {known_hosts_path}")
+            return None
+        except Exception as save_err:
+            err_msg = f"Failed to save host keys to {known_hosts_path}: {save_err}"
+            logger.error(err_msg)
+            return f"Error: Connection successful but {err_msg}"
+
+    def _handle_connection_exception(self, e: Exception, client: paramiko.SSHClient, capture_policy: '_FingerprintCapturePolicy') -> Tuple[Optional[str], Optional[str]]:
+        client.close()
+        if isinstance(e, paramiko.BadHostKeyException):
+            try:
+                key_bytes = e.key.asbytes()
+                new_fp = "SHA256:" + base64.b64encode(hashlib.sha256(key_bytes).digest()).decode('utf-8').replace('=', '')
+            except AttributeError:
+                new_fp = "SHA256:unknown"
+            return "Host key mismatch", new_fp
+        elif isinstance(e, paramiko.SSHException):
+            msg = str(e)
+            if "Host key verification failed" in msg:
+                return msg, capture_policy.fingerprint
+            return msg, None
+        else:
+            return str(e), None
+
     def _get_ssh_client(self, config: Dict, trust_host: bool = False) -> Tuple[Optional[paramiko.SSHClient], Optional[str], Optional[str]]:
         """
         Internal helper to create and connect an SSH client.
@@ -161,17 +204,9 @@ class SSHManager:
             return None, "Error: Invalid server configuration.", None
 
         alias = config.get('alias')
-        if alias and alias in self._client_pool:
-            client = self._client_pool[alias]
-            transport = client.get_transport()
-            if transport and transport.is_active():
-                return client, None, None
-            else:
-                try:
-                    client.close()
-                except Exception:
-                    pass
-                del self._client_pool[alias]
+        client = self._get_pooled_client(alias)
+        if client:
+            return client, None, None
 
         host = config.get('host')
         port = int(config.get('port', 22))
@@ -194,41 +229,18 @@ class SSHManager:
                 return None, err, None
             
             # Save host keys if trusted
-            if trust_host:
-                try:
-                    client.save_host_keys(known_hosts_path)
-                    logger.info(f"Successfully added and saved host key for {host} to {known_hosts_path}")
-                except Exception as save_err:
-                    err_msg = f"Failed to save host keys to {known_hosts_path}: {save_err}"
-                    logger.error(err_msg)
-                    client.close()
-                    return None, f"Error: Connection successful but {err_msg}", None
+            err_msg = self._save_host_keys_if_trusted(client, host, known_hosts_path, trust_host)
+            if err_msg:
+                client.close()
+                return None, err_msg, None
 
             if alias:
                 self._client_pool[alias] = client
 
             return client, None, None
-        except paramiko.BadHostKeyException as e:
-            client.close()
-            # Capture the new fingerprint even on mismatch for display
-            try:
-                key_bytes = e.key.asbytes()
-                new_fp = "SHA256:" + base64.b64encode(hashlib.sha256(key_bytes).digest()).decode('utf-8').replace('=', '')
-            except AttributeError:
-                # Fallback for mocked environments or cases where e.key is not a proper paramiko PKey
-                new_fp = "SHA256:unknown"
-
-            return None, "Host key mismatch", new_fp
-        except paramiko.SSHException as e:
-            client.close()
-            msg = str(e)
-            if "Host key verification failed" in msg:
-                # Return the captured fingerprint if available
-                return None, msg, capture_policy.fingerprint
-            return None, msg, None
         except Exception as e:
-            client.close()
-            return None, str(e), None
+            err_msg, fingerprint = self._handle_connection_exception(e, client, capture_policy)
+            return None, err_msg, fingerprint
 
     def test_server_connection(self, config: Dict, trust_host: bool = False) -> Tuple[bool, str, Optional[str]]:
         """Attempt to connect and return (success, message, fingerprint)."""
