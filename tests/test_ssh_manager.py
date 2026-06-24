@@ -20,7 +20,8 @@ except ImportError:
     paramiko_mock.ECDSAKey = MagicMock
     paramiko_mock.DSSKey = MagicMock
 
-    class SSHExceptionMock(Exception): pass
+    class SSHExceptionMock(Exception):
+        pass
     class BadHostKeyExceptionMock(Exception):
         def __init__(self, hostname, key, expected_key):
             self.hostname = hostname
@@ -131,6 +132,52 @@ class TestSSHManager(unittest.TestCase):
         self.assertIsNone(client)
         self.assertEqual(msg, "Connection timed out")
         self.assertIsNone(fingerprint)
+
+
+    @patch("ssh_manager.os.path.realpath")
+    @patch("ssh_manager.os.path.abspath")
+    @patch("ssh_manager.os.getenv")
+    @patch("ssh_manager.os.path.exists")
+    @patch("ssh_manager.os.path.isfile")
+    def test_connect_client_path_traversal_protection(self, mock_isfile, mock_exists, mock_getenv, mock_abspath, mock_realpath):
+        client = MagicMock()
+
+        # Scenario 1: Path is valid and within the allowed directory
+        mock_exists.return_value = True
+        mock_isfile.return_value = True
+
+        mock_realpath.return_value = "/app/ssh_keys/valid_key.pem"
+        mock_getenv.return_value = "/app/ssh_keys"
+
+        def abspath_side_effect(path):
+            if path == "/app/ssh_keys" or path == "ssh_keys":
+                return "/app/ssh_keys"
+            return path
+        mock_abspath.side_effect = abspath_side_effect
+
+        config = {
+            "host": "192.0.2.1",
+            "auth_method": "key",
+            "key": "/app/ssh_keys/valid_key.pem"
+        }
+
+        result = self.manager._connect_client(client, config)
+        self.assertIsNone(result)  # Success
+        client.connect.assert_called_with(hostname="192.0.2.1", port=22, username="root", key_filename="/app/ssh_keys/valid_key.pem", timeout=10)
+
+        # Scenario 2: Path traversal attack (LFI)
+        client.connect.reset_mock()
+        mock_realpath.return_value = "/etc/passwd"
+
+        config_attack = {
+            "host": "192.0.2.1",
+            "auth_method": "key",
+            "key": "/app/ssh_keys/../../../etc/passwd"
+        }
+
+        result = self.manager._connect_client(client, config_attack)
+        self.assertTrue(result.startswith("Error: SSH key file must be located within the allowed directory"))
+        client.connect.assert_not_called()
 
 
 class TestHumanizeAgeSeconds(unittest.TestCase):
