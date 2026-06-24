@@ -133,6 +133,118 @@ class TestSSHManager(unittest.TestCase):
         self.assertIsNone(fingerprint)
 
 
+
+    @patch('ssh_manager.logger.info')
+    @patch.object(SSHManager, '_get_ssh_client')
+    def test_server_power_action_reboot_success(self, mock_get_ssh_client, mock_logger_info):
+        mock_client = MagicMock()
+        mock_get_ssh_client.return_value = (mock_client, None, None)
+
+        mock_transport = MagicMock()
+        mock_client.get_transport.return_value = mock_transport
+
+        mock_channel = MagicMock()
+        mock_transport.open_session.return_value = mock_channel
+
+        # Test valid reboot action
+        result = self.manager.server_power_action("alpha", "reboot")
+
+        mock_channel.exec_command.assert_called_once_with("sudo reboot")
+        self.assertEqual(result, "✅ Command `sudo reboot` sent to `alpha`. Server is rebooting...")
+        mock_logger_info.assert_called_once_with("Initiating reboot on 'alpha' via command: sudo reboot")
+        mock_client.close.assert_called_once()
+
+    @patch.object(SSHManager, '_get_ssh_client')
+    def test_server_power_action_shutdown_success(self, mock_get_ssh_client):
+        mock_client = MagicMock()
+        mock_get_ssh_client.return_value = (mock_client, None, None)
+
+        mock_transport = MagicMock()
+        mock_client.get_transport.return_value = mock_transport
+
+        mock_channel = MagicMock()
+        mock_transport.open_session.return_value = mock_channel
+
+        # Test valid shutdown action
+        result = self.manager.server_power_action("alpha", "shutdown")
+
+        mock_channel.exec_command.assert_called_once_with("sudo shutdown -h now")
+        self.assertEqual(result, "✅ Command `sudo shutdown -h now` sent to `alpha`. Server is shutdowning...")
+        mock_client.close.assert_called_once()
+
+    def test_server_power_action_invalid(self):
+        result = self.manager.server_power_action("alpha", "invalid_action")
+        self.assertEqual(result, "Error: Invalid action 'invalid_action'. Use 'reboot' or 'shutdown'.")
+
+    @patch('ssh_manager.logger.error')
+    @patch.object(SSHManager, '_get_ssh_client')
+    def test_server_power_action_ssh_error(self, mock_get_ssh_client, mock_logger_error):
+        mock_get_ssh_client.return_value = (None, "Connection failed", None)
+
+        result = self.manager.server_power_action("alpha", "reboot")
+
+        self.assertEqual(result, "SSH Error: Connection failed")
+        mock_logger_error.assert_called_once_with("SSH Connection Error for reboot on 'alpha': Connection failed")
+
+    @patch.object(SSHManager, '_get_ssh_client')
+    def test_server_power_action_eof_error(self, mock_get_ssh_client):
+        mock_client = MagicMock()
+        mock_get_ssh_client.return_value = (mock_client, None, None)
+
+        mock_transport = MagicMock()
+        mock_client.get_transport.return_value = mock_transport
+
+        mock_channel = MagicMock()
+        mock_transport.open_session.return_value = mock_channel
+
+        # Simulate an EOFError which should be caught and handled gracefully
+        mock_channel.exec_command.side_effect = EOFError("EOF when reading a line")
+
+        result = self.manager.server_power_action("alpha", "reboot")
+
+        self.assertEqual(result, "✅ Command `sudo reboot` sent to `alpha`. Server is rebooting (Connection lost as expected).")
+        mock_client.close.assert_called_once()
+
+    @patch('ssh_manager.logger.error')
+    @patch.object(SSHManager, '_get_ssh_client')
+    def test_server_power_action_other_error(self, mock_get_ssh_client, mock_logger_error):
+        mock_client = MagicMock()
+        mock_get_ssh_client.return_value = (mock_client, None, None)
+
+        mock_transport = MagicMock()
+        mock_client.get_transport.return_value = mock_transport
+
+        mock_channel = MagicMock()
+        mock_transport.open_session.return_value = mock_channel
+
+        # Simulate a generic Exception
+        mock_channel.exec_command.side_effect = Exception("Some unknown error")
+
+        result = self.manager.server_power_action("alpha", "reboot")
+
+        self.assertEqual(result, "SSH Error during reboot on 'alpha': Some unknown error")
+        mock_logger_error.assert_called_once_with("SSH Error during reboot on 'alpha': Some unknown error")
+        mock_client.close.assert_called_once()
+
+    @patch.object(SSHManager, '_get_ssh_client')
+    def test_server_power_action_pool_eviction(self, mock_get_ssh_client):
+        mock_client = MagicMock()
+        mock_get_ssh_client.return_value = (mock_client, None, None)
+
+        mock_transport = MagicMock()
+        mock_client.get_transport.return_value = mock_transport
+
+        mock_channel = MagicMock()
+        mock_transport.open_session.return_value = mock_channel
+
+        # Pre-populate the client pool
+        self.manager._client_pool["alpha"] = mock_client
+
+        result = self.manager.server_power_action("alpha", "reboot")
+
+        self.assertNotIn("alpha", self.manager._client_pool)
+        mock_client.close.assert_called_once()
+
 class TestHumanizeAgeSeconds(unittest.TestCase):
     def test_empty_strings(self):
         """Test with empty strings and missing values."""
