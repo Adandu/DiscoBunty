@@ -64,6 +64,7 @@ class SSHManager:
         self.servers = servers
         self.servers_by_alias = {s['alias']: s for s in servers}
         self._log_cache = {} # Cache for log file lists: {alias: (timestamp, [files])}
+        self._container_cache = {} # Cache for containers: {alias: (timestamp, [containers])}
         self._client_pool = {} # Cache for SSH clients: {alias: paramiko.SSHClient}
 
     def update_servers(self, servers: List[Dict]) -> None:
@@ -287,7 +288,13 @@ class SSHManager:
             pass  # Client is pooled, do not close
 
     def get_containers(self, alias: str) -> List[str]:
-        """Fetch all container names from a server for autocomplete."""
+        """Fetch all container names from a server for autocomplete, with 5-min caching."""
+        now = time.time()
+        if alias in self._container_cache:
+            ts, containers = self._container_cache[alias]
+            if now - ts < 300: # 5 minute cache
+                return containers
+
         cmd = "sudo docker ps -a --format '{{.Names}}'"
         output = self.execute_command(alias, cmd)
         
@@ -295,6 +302,7 @@ class SSHManager:
             return []
             
         containers = [name.strip() for name in output.split('\n') if name.strip()]
+        self._container_cache[alias] = (now, containers)
         return containers
 
     def execute_probe(self, config: Dict, command: str) -> str:
