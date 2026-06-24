@@ -105,6 +105,16 @@ class ConfigManagerTests(unittest.TestCase):
                 with self.assertRaises(ValidationError):
                     manager.import_raw_config(invalid_config)
 
+    def test_import_raw_config_invalid_type(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = {"SECRET_KEY": "z" * 32, "DATA_DIR": temp_dir}
+            with patch.dict(os.environ, env, clear=False):
+                manager = ConfigManager()
+                # Some Pydantic versions throw ValueError instead of ValidationError
+                # for certain structurally invalid inputs like arrays instead of dicts.
+                with self.assertRaises(ValueError):
+                    manager.import_raw_config(b"[]")
+
     @patch("config_manager.logger.error")
     @patch("builtins.open", side_effect=PermissionError("Permission denied"))
     def test_save_config_handles_exception(self, mock_open, mock_logger_error):
