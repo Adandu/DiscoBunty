@@ -122,5 +122,19 @@ class ConfigManagerTests(unittest.TestCase):
                 args, _ = mock_logger_error.call_args_list[-1]
                 self.assertIn("Failed to save", args[0])
                 self.assertIn("Permission denied", args[0])
+
+    def test_export_raw_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = {"SECRET_KEY": "z" * 32, "DATA_DIR": temp_dir}
+            with patch.dict(os.environ, env, clear=False):
+                manager = ConfigManager()
+                exported = manager.export_raw_config()
+
+                self.assertIsInstance(exported, bytes)
+
+                parsed = json.loads(exported.decode("utf-8"))
+                self.assertIn("webui", parsed)
+                self.assertIn("features", parsed)
+
 if __name__ == "__main__":
     unittest.main()
