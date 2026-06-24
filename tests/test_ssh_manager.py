@@ -133,6 +133,56 @@ class TestSSHManager(unittest.TestCase):
         self.assertIsNone(fingerprint)
 
 
+
+    @patch('ssh_manager.time.time')
+    def test_get_log_files_success(self, mock_time):
+        mock_time.return_value = 1000.0
+        self.manager.execute_command = MagicMock(return_value="/var/log/syslog\n/var/log/auth.log\n")
+
+        files = self.manager.get_log_files("alpha")
+
+        self.assertEqual(files, ["/var/log/syslog", "/var/log/auth.log"])
+        self.manager.execute_command.assert_called_once()
+        self.assertEqual(self.manager._log_cache["alpha"], (1000.0, ["/var/log/syslog", "/var/log/auth.log"]))
+
+    @patch('ssh_manager.time.time')
+    def test_get_log_files_caching(self, mock_time):
+        self.manager.execute_command = MagicMock(return_value="/var/log/syslog\n/var/log/auth.log\n")
+
+        # First call sets the cache
+        mock_time.return_value = 1000.0
+        files1 = self.manager.get_log_files("alpha")
+        self.assertEqual(files1, ["/var/log/syslog", "/var/log/auth.log"])
+        self.assertEqual(self.manager.execute_command.call_count, 1)
+
+        # Second call within 5 mins uses cache
+        mock_time.return_value = 1200.0
+        files2 = self.manager.get_log_files("alpha")
+        self.assertEqual(files2, ["/var/log/syslog", "/var/log/auth.log"])
+        self.assertEqual(self.manager.execute_command.call_count, 1)
+
+        # Third call after 5 mins expires cache
+        mock_time.return_value = 1500.0
+        self.manager.execute_command.return_value = "/var/log/kern.log\n"
+        files3 = self.manager.get_log_files("alpha")
+        self.assertEqual(files3, ["/var/log/kern.log"])
+        self.assertEqual(self.manager.execute_command.call_count, 2)
+
+    def test_get_log_files_error(self):
+        self.manager.execute_command = MagicMock(return_value="SSH Error: Connection timed out")
+
+        files = self.manager.get_log_files("alpha")
+
+        self.assertEqual(files, [])
+        self.manager.execute_command.assert_called_once()
+        self.assertNotIn("alpha", self.manager._log_cache)
+
+        # Test the other error string condition
+        self.manager.execute_command.return_value = "Error: Permission denied"
+        files = self.manager.get_log_files("beta")
+        self.assertEqual(files, [])
+        self.assertNotIn("beta", self.manager._log_cache)
+
 class TestHumanizeAgeSeconds(unittest.TestCase):
     def test_empty_strings(self):
         """Test with empty strings and missing values."""
