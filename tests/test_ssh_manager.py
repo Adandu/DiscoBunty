@@ -68,6 +68,46 @@ class TestSSHManager(unittest.TestCase):
         self.assertEqual(aliases, [None, "valid_alias"])
 
 
+
+    @patch.object(SSHManager, 'execute_command')
+    def test_get_container_details_happy_path(self, mock_execute):
+        """Test fetching container details correctly passes the formatted command."""
+        mock_execute.return_value = "Status: running\nImage: my-image"
+        result = self.manager.get_container_details("alpha", "my_container")
+
+        expected_format = (
+            "Status: {{.State.Status}}\n"
+            "Image: {{.Config.Image}}\n"
+            "IP Address: {{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}\n"
+            "Ports: {{range $p, $conf := .NetworkSettings.Ports}}{{$p}}{{if $conf}} -> {{(index $conf 0).HostPort}}{{end}} {{end}}"
+        )
+        expected_cmd = f"sudo docker inspect --format '{expected_format}' my_container"
+
+        mock_execute.assert_called_once_with("alpha", expected_cmd)
+        self.assertEqual(result, "Status: running\nImage: my-image")
+
+    @patch.object(SSHManager, 'execute_command')
+    def test_get_container_details_malicious_name(self, mock_execute):
+        """Test fetching container details correctly quotes a malicious container name."""
+        mock_execute.return_value = "Error: No such container"
+
+        malicious_name = "my_container'; drop table users; --"
+        result = self.manager.get_container_details("alpha", malicious_name)
+
+        expected_format = (
+            "Status: {{.State.Status}}\n"
+            "Image: {{.Config.Image}}\n"
+            "IP Address: {{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}\n"
+            "Ports: {{range $p, $conf := .NetworkSettings.Ports}}{{$p}}{{if $conf}} -> {{(index $conf 0).HostPort}}{{end}} {{end}}"
+        )
+
+        import shlex
+        safe_container = shlex.quote(malicious_name)
+        expected_cmd = f"sudo docker inspect --format '{expected_format}' {safe_container}"
+
+        mock_execute.assert_called_once_with("alpha", expected_cmd)
+        self.assertEqual(result, "Error: No such container")
+
     @patch('ssh_manager.paramiko.SSHClient')
     def test_get_ssh_client_bad_host_key(self, mock_ssh_client_class):
         """Test _get_ssh_client returns correct tuple on BadHostKeyException."""
