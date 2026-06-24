@@ -198,8 +198,6 @@ class WebAppTests(unittest.TestCase):
             from models import ServerSettings
             _state.config.servers = [ServerSettings(alias="example_server", host="192.0.2.50", user="test", password="original_server_password", key="original_server_key")]
             _state.save_config(_state.config)
-            original_webui_hash = _state.config.webui.password
-            original_power_hash = _state.config.features.power_control_password
 
 
             payload = _state.config.model_dump()
@@ -292,8 +290,6 @@ class WebAppTests(unittest.TestCase):
             from models import ServerSettings
             _state.config.servers = [ServerSettings(alias="example_server", host="192.0.2.50", user="test", password="original_server_password", key="original_server_key")]
             _state.save_config(_state.config)
-            original_webui_hash = _state.config.webui.password
-            original_power_hash = _state.config.features.power_control_password
 
 
             payload = _state.config.model_dump()
@@ -326,8 +322,6 @@ class WebAppTests(unittest.TestCase):
             from models import ServerSettings
             _state.config.servers = [ServerSettings(alias="example_server", host="192.0.2.50", user="test", password="original_server_password", key="original_server_key")]
             _state.save_config(_state.config)
-            original_webui_hash = _state.config.webui.password
-            original_power_hash = _state.config.features.power_control_password
 
             # Login
             login_page = client.get("/login")
@@ -348,8 +342,6 @@ class WebAppTests(unittest.TestCase):
             from models import ServerSettings
             _state.config.servers = [ServerSettings(alias="example_server", host="192.0.2.50", user="test", password="original_server_password", key="original_server_key")]
             _state.save_config(_state.config)
-            original_webui_hash = _state.config.webui.password
-            original_power_hash = _state.config.features.power_control_password
 
 
             payload = _state.config.model_dump()

@@ -9,7 +9,7 @@ class AuthUtilsTests(unittest.TestCase):
         from auth_utils import PASSWORD_HASH_PREFIX
         self.assertTrue(is_password_hash(f"{PASSWORD_HASH_PREFIX}$some$other$stuff"))
         self.assertFalse(is_password_hash(f"{PASSWORD_HASH_PREFIX}"))
-        self.assertFalse(is_password_hash(f"WRONG_PREFIX$some$stuff"))
+        self.assertFalse(is_password_hash("WRONG_PREFIX$some$stuff"))
         self.assertFalse(is_password_hash(""))
         self.assertFalse(is_password_hash(None))
         self.assertFalse(is_password_hash("legacy-plaintext"))

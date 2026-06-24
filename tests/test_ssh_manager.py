@@ -20,7 +20,8 @@ except ImportError:
     paramiko_mock.ECDSAKey = MagicMock
     paramiko_mock.DSSKey = MagicMock
 
-    class SSHExceptionMock(Exception): pass
+    class SSHExceptionMock(Exception):
+        pass
     class BadHostKeyExceptionMock(Exception):
         def __init__(self, hostname, key, expected_key):
             self.hostname = hostname
