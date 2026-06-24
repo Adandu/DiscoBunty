@@ -133,6 +133,59 @@ class TestSSHManager(unittest.TestCase):
         self.assertIsNone(fingerprint)
 
 
+
+    def test_check_server_capabilities_server_not_found(self):
+        self.manager.get_server_by_alias = MagicMock(return_value=None)
+        status = self.manager.check_server_capabilities("alpha")
+        self.assertEqual(status["message"], "Server not configured")
+        self.assertEqual(status["ssh"], "fail")
+
+    def test_check_server_capabilities_connection_failed_no_fingerprint(self):
+        self.manager.get_server_by_alias = MagicMock(return_value={"alias": "alpha"})
+        self.manager.test_server_connection = MagicMock(return_value=(False, "Connection refused", None))
+        status = self.manager.check_server_capabilities("alpha")
+        self.assertEqual(status["known_host"], "error")
+        self.assertEqual(status["message"], "Connection refused")
+
+    def test_check_server_capabilities_connection_failed_with_fingerprint(self):
+        self.manager.get_server_by_alias = MagicMock(return_value={"alias": "alpha"})
+        self.manager.test_server_connection = MagicMock(return_value=(False, "Host key mismatch", "some_fingerprint"))
+        status = self.manager.check_server_capabilities("alpha")
+        self.assertEqual(status["known_host"], "missing")
+        self.assertEqual(status["message"], "Host key mismatch")
+
+    def test_check_server_capabilities_ssh_error_output(self):
+        self.manager.get_server_by_alias = MagicMock(return_value={"alias": "alpha"})
+        self.manager.test_server_connection = MagicMock(return_value=(True, "", None))
+        self.manager._build_capabilities_command = MagicMock(return_value="cmd")
+        self.manager.execute_command = MagicMock(return_value="SSH Error: Timeout")
+        status = self.manager.check_server_capabilities("alpha")
+        self.assertEqual(status["ssh"], "ok")
+        self.assertEqual(status["message"], "SSH Error: Timeout")
+
+    def test_check_server_capabilities_success(self):
+        self.manager.get_server_by_alias = MagicMock(return_value={"alias": "alpha"})
+        self.manager.test_server_connection = MagicMock(return_value=(True, "", None))
+        self.manager._build_capabilities_command = MagicMock(return_value="cmd")
+        self.manager.execute_command = MagicMock(return_value="output")
+
+        def fake_parse(output, status):
+            status["docker"] = "ok"
+            status["sudo"] = "ok"
+            status["backup"] = "ok"
+
+        self.manager._parse_capabilities_output = MagicMock(side_effect=fake_parse)
+
+        status = self.manager.check_server_capabilities("alpha")
+
+        self.assertEqual(status["ssh"], "ok")
+        self.assertEqual(status["docker"], "ok")
+        self.assertEqual(status["sudo"], "ok")
+        self.assertEqual(status["backup"], "ok")
+        self.manager._parse_capabilities_output.assert_called_once()
+        self.manager.execute_command.assert_called_once_with("alpha", "cmd")
+
+
 class TestHumanizeAgeSeconds(unittest.TestCase):
     def test_empty_strings(self):
         """Test with empty strings and missing values."""
