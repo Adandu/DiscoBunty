@@ -132,7 +132,26 @@ class SSHManager:
                 client.connect(hostname=host, port=port, username=user, key_filename=key_value, timeout=10)
             else:
                 private_key = None
-                for key_class in [paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey]:
+
+                header = key_value.split('\n', 1)[0] if key_value else ""
+                if "BEGIN RSA" in header:
+                    key_classes = [paramiko.RSAKey]
+                elif "BEGIN DSA" in header:
+                    key_classes = []
+                    if hasattr(paramiko, 'DSSKey'):
+                        key_classes.append(paramiko.DSSKey)
+                elif "BEGIN EC" in header:
+                    key_classes = [paramiko.ECDSAKey]
+                elif "BEGIN OPENSSH" in header:
+                    key_classes = [paramiko.Ed25519Key, paramiko.RSAKey, paramiko.ECDSAKey]
+                    if hasattr(paramiko, 'DSSKey'):
+                        key_classes.append(paramiko.DSSKey)
+                else:
+                    key_classes = [paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey]
+                    if hasattr(paramiko, 'DSSKey'):
+                        key_classes.append(paramiko.DSSKey)
+
+                for key_class in key_classes:
                     try:
                         private_key = key_class.from_private_key(io.StringIO(key_value))
                         if private_key:
