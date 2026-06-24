@@ -133,6 +133,46 @@ class TestSSHManager(unittest.TestCase):
         self.assertIsNone(fingerprint)
 
 
+
+
+
+    @patch.object(SSHManager, 'execute_command')
+    def test_resolve_remote_path_success(self, mock_execute_command):
+        """Test resolve_remote_path successfully resolves a path."""
+        mock_execute_command.return_value = "/real/path/to/file\n"
+        result = self.manager.resolve_remote_path("alpha", "/symlink/path")
+        self.assertEqual(result, "/real/path/to/file")
+        import shlex
+        expected_cmd = f"realpath {shlex.quote('/symlink/path')}"
+        mock_execute_command.assert_called_once_with("alpha", expected_cmd)
+
+    @patch('ssh_manager.logger.warning')
+    @patch.object(SSHManager, 'execute_command')
+    def test_resolve_remote_path_error(self, mock_execute_command, mock_logger_warning):
+        """Test resolve_remote_path handles SSH errors."""
+        error_output = "SSH Error: connection failed\n"
+        mock_execute_command.return_value = error_output
+        result = self.manager.resolve_remote_path("alpha", "/symlink/path")
+        self.assertIsNone(result)
+        mock_logger_warning.assert_called_once_with(
+            "Failed to resolve remote path %r on %s: %s",
+            "/symlink/path", "alpha", "SSH Error: connection failed"
+        )
+
+    @patch('ssh_manager.logger.warning')
+    @patch.object(SSHManager, 'execute_command')
+    def test_resolve_remote_path_generic_error(self, mock_execute_command, mock_logger_warning):
+        """Test resolve_remote_path handles generic errors."""
+        error_output = "realpath: Error: No such file or directory\n"
+        mock_execute_command.return_value = error_output
+        result = self.manager.resolve_remote_path("alpha", "/symlink/path")
+        self.assertIsNone(result)
+        mock_logger_warning.assert_called_once_with(
+            "Failed to resolve remote path %r on %s: %s",
+            "/symlink/path", "alpha", "realpath: Error: No such file or directory"
+        )
+
+
 class TestHumanizeAgeSeconds(unittest.TestCase):
     def test_empty_strings(self):
         """Test with empty strings and missing values."""
