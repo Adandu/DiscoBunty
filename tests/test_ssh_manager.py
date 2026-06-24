@@ -68,6 +68,31 @@ class TestSSHManager(unittest.TestCase):
         self.assertEqual(aliases, [None, "valid_alias"])
 
 
+
+    def test_build_capabilities_command_basic(self):
+        cmd = self.manager._build_capabilities_command("", False)
+        self.assertIn("---RESULTS---", cmd)
+        self.assertIn("sudo_status=ok", cmd)
+        self.assertNotIn("docker_status", cmd)
+        self.assertNotIn("backup_status", cmd)
+
+    def test_build_capabilities_command_with_docker(self):
+        cmd = self.manager._build_capabilities_command("", True)
+        self.assertIn("docker_status=ok", cmd)
+        self.assertNotIn("backup_status", cmd)
+
+    def test_build_capabilities_command_with_backup(self):
+        cmd = self.manager._build_capabilities_command("/var/backups", False)
+        self.assertNotIn("docker_status", cmd)
+        self.assertIn("backup_status=ok", cmd)
+        self.assertIn("test -e /var/backups", cmd)
+
+    def test_build_capabilities_command_escaping(self):
+        cmd = self.manager._build_capabilities_command("/path with spaces; rm -rf /", False)
+        # Verify the malicious path is safely quoted by shlex and no unescaped semicolon or command breaks out
+        self.assertIn("/path with spaces; rm -rf /", cmd)
+        self.assertIn("sudo sh -c 'echo", cmd)
+
     @patch('ssh_manager.paramiko.SSHClient')
     def test_get_ssh_client_bad_host_key(self, mock_ssh_client_class):
         """Test _get_ssh_client returns correct tuple on BadHostKeyException."""
