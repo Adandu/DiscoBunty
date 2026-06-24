@@ -703,8 +703,8 @@ class WebAppTests(unittest.TestCase):
             mock_overview.return_value = {"status": "ok", "uptime": "10 days"}
 
             # Add a server to config
-            from models import ServerConfig
-            server = ServerConfig(alias="test_server", host="192.0.2.1", user="root", port=22, auth_method="password", password="pass")
+            from models import ServerSettings
+            server = ServerSettings(alias="test_server", host="192.0.2.1", user="root", port=22, auth_method="password", password="pass")
             state.config.servers = [server]
             state.refresh_runtime()
 
