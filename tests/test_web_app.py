@@ -687,6 +687,39 @@ class WebAppTests(unittest.TestCase):
             patcher.stop()
             temp_dir.cleanup()
 
+    def test_get_app_logs(self):
+        temp_dir, patcher, client, state = self._build_client()
+        try:
+            # Unauthenticated request should fail
+            response = client.get("/api/logs")
+            self.assertEqual(response.status_code, 401)
+
+            # Authenticate
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+
+            # Add some logs to the buffer
+            state.log_buffer.append("Log entry 1")
+            state.log_buffer.append("Log entry 2")
+
+            # Authenticated request should succeed
+            response = client.get("/api/logs")
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertIn("logs", data)
+            self.assertIn("Log entry 1", data["logs"])
+            self.assertIn("Log entry 2", data["logs"])
+
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
 class TestGetClientIp(unittest.TestCase):
     def _request(self, headers=None, client=("127.0.0.1", 8080), trusted_proxies="127.0.0.1"):
         from fastapi import FastAPI, Request
