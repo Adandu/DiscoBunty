@@ -133,6 +133,19 @@ class TestSSHManager(unittest.TestCase):
         self.assertIsNone(fingerprint)
 
 
+    @patch('ssh_manager.SSHManager.test_server_connection')
+    @patch('ssh_manager.SSHManager.execute_command')
+    def test_check_server_capabilities_execution_error(self, mock_execute, mock_test_conn):
+        """Test check_server_capabilities when execute_command raises an Exception."""
+        mock_test_conn.return_value = (True, "ok", "fingerprint")
+        mock_execute.side_effect = Exception("Mocked execution failure")
+
+        result = self.manager.check_server_capabilities("alpha")
+
+        self.assertEqual(result["ssh"], "ok")
+        self.assertEqual(result["message"], "Error during capability check: Mocked execution failure")
+
+
 class TestHumanizeAgeSeconds(unittest.TestCase):
     def test_empty_strings(self):
         """Test with empty strings and missing values."""

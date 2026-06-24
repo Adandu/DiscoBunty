@@ -410,13 +410,17 @@ class SSHManager:
         status["ssh"] = "ok"
 
         command = self._build_capabilities_command(backup_path, include_docker)
-        output = self.execute_command(alias, command)
+        try:
+            output = self.execute_command(alias, command)
 
-        if "SSH Error" in output:
-            status["message"] = output
+            if "SSH Error" in output or "SSH Execution Error" in output:
+                status["message"] = output
+                return status
+
+            self._parse_capabilities_output(output, status)
+        except Exception as e:
+            status["message"] = f"Error during capability check: {str(e)}"
             return status
-
-        self._parse_capabilities_output(output, status)
 
         return status
 
