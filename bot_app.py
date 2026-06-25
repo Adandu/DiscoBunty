@@ -95,7 +95,8 @@ class PowerControlModal(discord.ui.Modal, title="Verify Power Action"):
         self.action = action
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        if not verify_password(self.password.value, self.state.config.features.power_control_password):
+        is_valid = await asyncio.to_thread(verify_password, self.password.value, self.state.config.features.power_control_password)
+        if not is_valid:
             await interaction.response.send_message("❌ Incorrect password. Action aborted.", ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)
