@@ -64,6 +64,7 @@ class SSHManager:
         self.servers = servers
         self.servers_by_alias = {s['alias']: s for s in servers}
         self._log_cache = {} # Cache for log file lists: {alias: (timestamp, [files])}
+        self._container_cache = {} # Cache for containers: {alias: (timestamp, [containers])}
         self._client_pool = {} # Cache for SSH clients: {alias: paramiko.SSHClient}
 
     def update_servers(self, servers: List[Dict]) -> None:
@@ -128,11 +129,43 @@ class SSHManager:
             if not key_value:
                 return "Error: SSH Key not provided."
 
-            if key_value.startswith('/') or (os.path.exists(key_value) and os.path.isfile(key_value)):
-                client.connect(hostname=host, port=port, username=user, key_filename=key_value, timeout=10)
+            # Heuristic: If it has newlines, it's a raw key. Otherwise, treat as path if it looks like one.
+            if "\n" not in key_value and (key_value.startswith('/') or (os.path.exists(key_value) and os.path.isfile(key_value))):
+                try:
+                    resolved_path = os.path.realpath(key_value)
+                    # Docker default is /app/ssh_keys, fallback to ./ssh_keys
+                    default_keys_dir = "/app/ssh_keys" if os.path.exists("/app/ssh_keys") else os.path.abspath("ssh_keys")
+                    allowed_dir = os.path.abspath(os.getenv("SSH_KEYS_DIR", default_keys_dir))
+
+                    # Use os.path.commonpath to prevent traversal
+                    if os.path.commonpath([resolved_path, allowed_dir]) != allowed_dir:
+                        return f"Error: SSH key file must be located within the allowed directory ({allowed_dir})."
+                except Exception as e:
+                    return f"Error: Invalid SSH key path. ({str(e)})"
+
+                client.connect(hostname=host, port=port, username=user, key_filename=resolved_path, timeout=10)
             else:
                 private_key = None
-                for key_class in [paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey]:
+
+                header = key_value.split('\n', 1)[0] if key_value else ""
+                if "BEGIN RSA" in header:
+                    key_classes = [paramiko.RSAKey]
+                elif "BEGIN DSA" in header:
+                    key_classes = []
+                    if hasattr(paramiko, 'DSSKey'):
+                        key_classes.append(paramiko.DSSKey)
+                elif "BEGIN EC" in header:
+                    key_classes = [paramiko.ECDSAKey]
+                elif "BEGIN OPENSSH" in header:
+                    key_classes = [paramiko.Ed25519Key, paramiko.RSAKey, paramiko.ECDSAKey]
+                    if hasattr(paramiko, 'DSSKey'):
+                        key_classes.append(paramiko.DSSKey)
+                else:
+                    key_classes = [paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey]
+                    if hasattr(paramiko, 'DSSKey'):
+                        key_classes.append(paramiko.DSSKey)
+
+                for key_class in key_classes:
                     try:
                         private_key = key_class.from_private_key(io.StringIO(key_value))
                         if private_key:
@@ -152,6 +185,49 @@ class SSHManager:
 
         return None
 
+    def _get_pooled_client(self, alias: Optional[str]) -> Optional[paramiko.SSHClient]:
+        if not alias or alias not in self._client_pool:
+            return None
+        client = self._client_pool[alias]
+        transport = client.get_transport()
+        if transport and transport.is_active():
+            return client
+        try:
+            client.close()
+        except Exception:
+            pass
+        del self._client_pool[alias]
+        return None
+
+    def _save_host_keys_if_trusted(self, client: paramiko.SSHClient, host: str, known_hosts_path: str, trust_host: bool) -> Optional[str]:
+        if not trust_host:
+            return None
+        try:
+            client.save_host_keys(known_hosts_path)
+            logger.info(f"Successfully added and saved host key for {host} to {known_hosts_path}")
+            return None
+        except Exception as save_err:
+            err_msg = f"Failed to save host keys to {known_hosts_path}: {save_err}"
+            logger.error(err_msg)
+            return f"Error: Connection successful but {err_msg}"
+
+    def _handle_connection_exception(self, e: Exception, client: paramiko.SSHClient, capture_policy: '_FingerprintCapturePolicy') -> Tuple[Optional[str], Optional[str]]:
+        client.close()
+        if isinstance(e, paramiko.BadHostKeyException):
+            try:
+                key_bytes = e.key.asbytes()
+                new_fp = "SHA256:" + base64.b64encode(hashlib.sha256(key_bytes).digest()).decode('utf-8').replace('=', '')
+            except AttributeError:
+                new_fp = "SHA256:unknown"
+            return "Host key mismatch", new_fp
+        elif isinstance(e, paramiko.SSHException):
+            msg = str(e)
+            if "Host key verification failed" in msg:
+                return msg, capture_policy.fingerprint
+            return msg, None
+        else:
+            return str(e), None
+
     def _get_ssh_client(self, config: Dict, trust_host: bool = False) -> Tuple[Optional[paramiko.SSHClient], Optional[str], Optional[str]]:
         """
         Internal helper to create and connect an SSH client.
@@ -161,17 +237,9 @@ class SSHManager:
             return None, "Error: Invalid server configuration.", None
 
         alias = config.get('alias')
-        if alias and alias in self._client_pool:
-            client = self._client_pool[alias]
-            transport = client.get_transport()
-            if transport and transport.is_active():
-                return client, None, None
-            else:
-                try:
-                    client.close()
-                except Exception:
-                    pass
-                del self._client_pool[alias]
+        client = self._get_pooled_client(alias)
+        if client:
+            return client, None, None
 
         host = config.get('host')
         port = int(config.get('port', 22))
@@ -194,41 +262,18 @@ class SSHManager:
                 return None, err, None
             
             # Save host keys if trusted
-            if trust_host:
-                try:
-                    client.save_host_keys(known_hosts_path)
-                    logger.info(f"Successfully added and saved host key for {host} to {known_hosts_path}")
-                except Exception as save_err:
-                    err_msg = f"Failed to save host keys to {known_hosts_path}: {save_err}"
-                    logger.error(err_msg)
-                    client.close()
-                    return None, f"Error: Connection successful but {err_msg}", None
+            err_msg = self._save_host_keys_if_trusted(client, host, known_hosts_path, trust_host)
+            if err_msg:
+                client.close()
+                return None, err_msg, None
 
             if alias:
                 self._client_pool[alias] = client
 
             return client, None, None
-        except paramiko.BadHostKeyException as e:
-            client.close()
-            # Capture the new fingerprint even on mismatch for display
-            try:
-                key_bytes = e.key.asbytes()
-                new_fp = "SHA256:" + base64.b64encode(hashlib.sha256(key_bytes).digest()).decode('utf-8').replace('=', '')
-            except AttributeError:
-                # Fallback for mocked environments or cases where e.key is not a proper paramiko PKey
-                new_fp = "SHA256:unknown"
-
-            return None, "Host key mismatch", new_fp
-        except paramiko.SSHException as e:
-            client.close()
-            msg = str(e)
-            if "Host key verification failed" in msg:
-                # Return the captured fingerprint if available
-                return None, msg, capture_policy.fingerprint
-            return None, msg, None
         except Exception as e:
-            client.close()
-            return None, str(e), None
+            err_msg, fingerprint = self._handle_connection_exception(e, client, capture_policy)
+            return None, err_msg, fingerprint
 
     def test_server_connection(self, config: Dict, trust_host: bool = False) -> Tuple[bool, str, Optional[str]]:
         """Attempt to connect and return (success, message, fingerprint)."""
@@ -241,10 +286,6 @@ class SSHManager:
     def execute_command(self, alias: str, command: str) -> str:
         """Connect to a server by alias and execute a command with sudo and path resolution."""
         config = self.get_server_by_alias(alias)
-        return self._execute_command_for_config(config, command, alias)
-
-    def _execute_command_on_config(self, config: Dict, command: str) -> str:
-        alias = config.get("alias", config.get("host", "unknown"))
         return self._execute_command_for_config(config, command, alias)
 
     def _execute_command_for_config(self, config: Dict, command: str, alias: str) -> str:
@@ -287,7 +328,13 @@ class SSHManager:
             pass  # Client is pooled, do not close
 
     def get_containers(self, alias: str) -> List[str]:
-        """Fetch all container names from a server for autocomplete."""
+        """Fetch all container names from a server for autocomplete, with 5-min caching."""
+        now = time.time()
+        if alias in self._container_cache:
+            ts, containers = self._container_cache[alias]
+            if now - ts < 300: # 5 minute cache
+                return containers
+
         cmd = "sudo docker ps -a --format '{{.Names}}'"
         output = self.execute_command(alias, cmd)
         
@@ -295,10 +342,12 @@ class SSHManager:
             return []
             
         containers = [name.strip() for name in output.split('\n') if name.strip()]
+        self._container_cache[alias] = (now, containers)
         return containers
 
     def execute_probe(self, config: Dict, command: str) -> str:
-        return self._execute_command_on_config(config, command)
+        alias = config.get("alias", config.get("host", "unknown"))
+        return self._execute_command_for_config(config, command, alias)
 
     def get_observability(self, alias: str, backup_path: str = "", include_docker: bool = False) -> Dict[str, str]:
         metrics = {
