@@ -100,6 +100,7 @@ class PowerControlModal(discord.ui.Modal, title="Verify Power Action"):
             await interaction.response.send_message("❌ Incorrect password. Action aborted.", ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)
+        self.state.audit_log(interaction.user.id, interaction.user.name, "server_power", f"Action: {self.action} | Server: {self.server}")
         output = await asyncio.to_thread(self.state.ssh_manager.server_power_action, self.server, self.action)
         await interaction.followup.send(output, ephemeral=True)
 
@@ -193,7 +194,6 @@ class ServerManagementCog(commands.Cog):
         if not self.state.config.features.power_control_enabled:
             await interaction.response.send_message("❌ Power control is currently disabled.", ephemeral=True)
             return
-        self.state.audit_log(interaction.user.id, interaction.user.name, "server_power", f"Action: {action} | Server: {server}")
         view = PowerConfirmationView(self.state, server, action)
         await interaction.response.send_message(
             content=f"⚠️ **Warning:** You are about to **{action}** server `{server}`. Are you sure?",
@@ -225,7 +225,7 @@ class ServerManagementCog(commands.Cog):
     async def update(self, interaction: discord.Interaction, server: str) -> None:
         self.ensure_server_access(interaction, server)
         await interaction.response.defer()
-        output = await asyncio.to_thread(self.state.ssh_manager.execute_command, server, "sudo apt-get update && sudo apt-get upgrade -y")
+        output = await asyncio.to_thread(self.state.ssh_manager.execute_command, server, "sudo sh -c 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y'")
         await interaction.followup.send(f"**Update Result for `{server}`:**\n```\n{output[:MAX_MSG_LEN]}\n```")
 
     @app_commands.command(name="process", description="Search for running processes on a server")

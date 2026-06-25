@@ -36,7 +36,7 @@ async def main() -> None:
             uvicorn.Server(
                 uvicorn.Config(
                     app,
-                    host="0.0.0.0",
+                    host="0.0.0.0",  # nosec B104
                     port=8000,
                     log_level="info",
                     proxy_headers=True,

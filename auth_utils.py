@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import secrets
 
-PASSWORD_HASH_PREFIX = "PBKDF2_SHA256"
+PASSWORD_HASH_PREFIX = "PBKDF2_SHA256"  # nosec B105
 PASSWORD_HASH_ITERATIONS = 310_000
 
 

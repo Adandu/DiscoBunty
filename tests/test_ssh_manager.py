@@ -68,6 +68,46 @@ class TestSSHManager(unittest.TestCase):
         aliases = manager.get_server_aliases()
         self.assertEqual(aliases, [None, "valid_alias"])
 
+    def test_update_servers_evicts_changed_and_removed_pooled_clients(self):
+        alpha_client = MagicMock()
+        alpha_transport = MagicMock()
+        alpha_transport.is_active.return_value = True
+        alpha_client.get_transport.return_value = alpha_transport
+
+        beta_client = MagicMock()
+        beta_transport = MagicMock()
+        beta_transport.is_active.return_value = True
+        beta_client.get_transport.return_value = beta_transport
+
+        self.manager._client_pool = {"alpha": alpha_client, "beta": beta_client}
+
+        self.manager.update_servers(
+            [
+                {"alias": "alpha", "host": "192.0.2.99"},
+                {"alias": "gamma", "host": "192.0.2.3"},
+            ]
+        )
+
+        self.assertNotIn("alpha", self.manager._client_pool)
+        self.assertNotIn("beta", self.manager._client_pool)
+        alpha_client.close.assert_called_once()
+        beta_client.close.assert_called_once()
+
+    def test_update_servers_keeps_unchanged_pooled_client(self):
+        alpha_client = MagicMock()
+        self.manager._client_pool = {"alpha": alpha_client}
+
+        self.manager.update_servers(
+            [
+                {"alias": "alpha", "host": "192.0.2.1"},
+                {"alias": "beta", "host": "192.0.2.2"},
+                {"alias": "gamma", "host": "192.0.2.3"},
+            ]
+        )
+
+        self.assertIs(self.manager._client_pool["alpha"], alpha_client)
+        alpha_client.close.assert_not_called()
+
 
 
     @patch.object(SSHManager, 'execute_command')

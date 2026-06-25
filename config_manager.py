@@ -2,27 +2,29 @@ import os
 import json
 import logging
 import copy
+import tempfile
 from pathlib import Path
 from auth_utils import hash_password, is_password_hash
-from crypto_utils import CryptoManager
+from crypto_utils import ConfigDecryptionError, CryptoManager
 from models import AppConfig
 
 logger = logging.getLogger('discobunty.config')
 
 DEFAULT_CONFIG = {
     "discord": {
-        "token": "",
+        "token": "",  # nosec B105
         "guild_id": "",
         "allowed_roles": "Admin,DevOps"
     },
     "features": {
         "enable_docker": False,
         "power_control_enabled": False,
-        "power_control_password": ""
+        "power_control_password": "",  # nosec B105
+        "allowed_containers": ""
     },
     "webui": {
         "enabled": True,
-        "password": ""
+        "password": ""  # nosec B105
     },
     "servers": []
 }
@@ -53,9 +55,13 @@ class ConfigManager:
                         self.save_config(AppConfig.model_validate(config))
                     return AppConfig.model_validate(config)
             except Exception as e:
-                logger.error(f"Failed to load config.json: {e}")
+                logger.error(f"Failed to load {config_source}: {e}")
+                raise ValueError(
+                    f"Existing configuration at {config_source} could not be loaded. "
+                    "Fix the file or restore a backup; refusing to overwrite it with defaults."
+                ) from e
         
-        logger.warning("Config file not found or invalid. Using defaults/env migration.")
+        logger.warning("Config file not found. Using defaults/env migration.")
         return self._migrate_from_env()
 
     def _resolve_existing_config_path(self) -> Path | None:
@@ -87,6 +93,7 @@ class ConfigManager:
         config["features"]["enable_docker"] = os.getenv('ENABLE_DOCKER', 'false').lower() == 'true'
         config["features"]["power_control_enabled"] = os.getenv('POWER_CONTROL_ENABLED', 'false').lower() == 'true'
         config["features"]["power_control_password"] = os.getenv('POWER_CONTROL_PASSWORD', '')
+        config["features"]["allowed_containers"] = os.getenv('ALLOWED_CONTAINERS', '')
         
         config["webui"]["enabled"] = os.getenv('WEBUI_ENABLED', 'true').lower() == 'true'
         config["webui"]["password"] = os.getenv('WEB_PASSWORD', '')
@@ -123,7 +130,7 @@ class ConfigManager:
         if "discord" in config and config["discord"].get("token"):
             t = config["discord"]["token"]
             if decrypt:
-                config["discord"]["token"] = self.crypto.decrypt(t) if t.startswith("ENC:") else t
+                config["discord"]["token"] = self.crypto.decrypt_strict(t) if t.startswith("ENC:") else t
             else:
                 config["discord"]["token"] = self.crypto.encrypt(t) if not t.startswith("ENC:") else t
 
@@ -132,9 +139,9 @@ class ConfigManager:
             if section in config and config[section].get(key):
                 p = config[section][key]
                 if decrypt:
-                    config[section][key] = self.crypto.decrypt(p)
+                    config[section][key] = self.crypto.decrypt_strict(p) if p.startswith("ENC:") else p
                 else:
-                    config[section][key] = hash_password(self.crypto.decrypt(p) if p.startswith("ENC:") else p)
+                    config[section][key] = hash_password(self.crypto.decrypt_strict(p) if p.startswith("ENC:") else p)
 
         _process_section_password("features", "power_control_password")
         _process_section_password("webui", "password")
@@ -143,11 +150,11 @@ class ConfigManager:
         if "servers" in config:
             for s in config["servers"]:
                 if s.get("password"):
-                    s["password"] = self.crypto.decrypt(s["password"]) if decrypt else self.crypto.encrypt(s["password"])
+                    s["password"] = self.crypto.decrypt_strict(s["password"]) if decrypt else self.crypto.encrypt(s["password"])
                 if s.get("key"):
                     # Only encrypt/decrypt if it's not a path
                     if s["key"] and not (s["key"].startswith('/') or os.path.isfile(s["key"])):
-                        s["key"] = self.crypto.decrypt(s["key"]) if decrypt else self.crypto.encrypt(s["key"])
+                        s["key"] = self.crypto.decrypt_strict(s["key"]) if decrypt else self.crypto.encrypt(s["key"])
         
         return config
 
@@ -177,13 +184,32 @@ class ConfigManager:
         to_save = copy.deepcopy(typed_runtime_config.model_dump(by_alias=True))
         to_save = self._process_config(to_save, decrypt=False)
         
+        tmp_path = None
         try:
-            with open(self.config_path, 'w', encoding='utf-8') as f:
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp_name = tempfile.mkstemp(
+                prefix=f".{self.config_path.name}.",
+                suffix=".tmp",
+                dir=self.config_path.parent,
+                text=True,
+            )
+            tmp_path = Path(tmp_name)
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 json.dump(to_save, f, indent=4)
+                f.write("\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.chmod(tmp_path, 0o600)
+            os.replace(tmp_path, self.config_path)
             self.config = typed_runtime_config # Update in-memory config
             logger.info(f"Saved configuration to {self.config_path}")
         except Exception as e:
             logger.error(f"Failed to save {self.config_path}: {e}")
+            if tmp_path:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except Exception as cleanup_error:
+                    logger.debug("Failed to remove temporary config file %s: %s", tmp_path, cleanup_error)
 
 
     def get_server_config(self) -> list[dict]:

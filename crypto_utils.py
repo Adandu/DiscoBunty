@@ -12,6 +12,10 @@ APP_SALT = b'bunty_static_salt_2024'
 _PBKDF2_ITERATIONS = 100_000
 
 
+class ConfigDecryptionError(ValueError):
+    """Raised when an encrypted configuration value cannot be decrypted."""
+
+
 class CryptoManager:
     def __init__(self, secret_key: str):
         if not secret_key or len(secret_key) < 32:
@@ -48,3 +52,11 @@ class CryptoManager:
         except Exception as e:
             logger.error(f"Decryption failed: {e}")
             return text
+
+    def decrypt_strict(self, text: str) -> str:
+        if not text or not text.startswith("ENC:"):
+            return text
+        decrypted = self.decrypt(text)
+        if decrypted == text:
+            raise ConfigDecryptionError("Encrypted configuration value could not be decrypted.")
+        return decrypted

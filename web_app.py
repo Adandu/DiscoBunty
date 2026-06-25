@@ -16,7 +16,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 from starlette.middleware.sessions import SessionMiddleware
 
-from app_state import AppState
+from app_state import AppState, MASKED_SECRET
 from auth_utils import hash_password
 from auth_utils import verify_password
 from models import (
@@ -309,14 +309,19 @@ async def test_server(request: Request, server_data: TestServerRequest):
     require_api_rate_limit(request, "Too many requests. Please wait before testing again.")
 
     server_payload = server_data.model_dump(by_alias=True)
-    original = state.servers_by_alias.get(server_data.alias)
+    original_alias = server_payload.get("_original_alias") or server_data.alias
+    original = state.servers_by_alias.get(original_alias)
     if original:
-        server_payload["host"] = original.host
-        server_payload["port"] = original.port
-        if server_payload.get("password") == "********":
+        if server_payload.get("password") == MASKED_SECRET:
             server_payload["password"] = original.password
-        if server_payload.get("key") == "********":
+        if server_payload.get("key") == MASKED_SECRET:
             server_payload["key"] = original.key
+    elif server_payload.get("password") == MASKED_SECRET or server_payload.get("key") == MASKED_SECRET:
+        raise HTTPException(
+            status_code=400,
+            detail="Masked credentials can only be used for an existing server.",
+        )
+    server_payload.pop("_original_alias", None)
 
     success, message, fingerprint = await asyncio.to_thread(
         state.ssh_manager.test_server_connection,
@@ -342,26 +347,28 @@ async def save_config_ui(request: Request, payload: SaveConfigRequest):
             detail="SECRET_KEY rotation is not supported from the WebUI.",
         )
 
-    if body["discord"].get("token") == "********":
+    if body["discord"].get("token") == MASKED_SECRET:
         body["discord"]["token"] = state.config.discord.token
-    if body["webui"].get("password") == "********":
+    if body["webui"].get("password") == MASKED_SECRET:
         body["webui"]["password"] = state.config.webui.password
-    if body["features"].get("power_control_password") == "********":
+    if body["features"].get("power_control_password") == MASKED_SECRET:
         body["features"]["power_control_password"] = (
             state.config.features.power_control_password
         )
 
 
-    original_by_index = list(state.config.servers)
-    for index, server in enumerate(body["servers"]):
+    for server in body["servers"]:
         original_alias = server.get("_original_alias") or server.get("alias")
         original = state.servers_by_alias.get(original_alias)
-        if not original and index < len(original_by_index):
-            original = original_by_index[index]
-        if original and server.get("password") == "********":
+        if original and server.get("password") == MASKED_SECRET:
             server["password"] = original.password
-        if original and server.get("key") == "********":
+        if original and server.get("key") == MASKED_SECRET:
             server["key"] = original.key
+        if not original and (server.get("password") == MASKED_SECRET or server.get("key") == MASKED_SECRET):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Masked credentials cannot be saved for unknown server '{server.get('alias', '')}'.",
+            )
         server.pop("_original_alias", None)
 
     new_config = AppConfig.model_validate(body)

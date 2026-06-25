@@ -7,6 +7,7 @@ import io
 import logging
 import shlex
 import time
+import threading
 from typing import List, Dict, Optional, Tuple
 
 logger = logging.getLogger('discobunty.ssh')
@@ -58,6 +59,14 @@ class _FingerprintCapturePolicy(paramiko.MissingHostKeyPolicy):
         self.fingerprint = "SHA256:" + base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode('utf-8').replace('=', '')
         raise paramiko.SSHException(f"Host key verification failed for {hostname}")
 
+
+class _TrustNewHostKeyPolicy(paramiko.MissingHostKeyPolicy):
+    def __init__(self, hostname: str):
+        self.hostname = hostname
+
+    def missing_host_key(self, client, hostname, key):
+        client.get_host_keys().add(self.hostname, key.get_name(), key)
+
 class SSHManager:
     def __init__(self, servers: List[Dict]):
         # Now initialized with the list from ConfigManager
@@ -66,12 +75,29 @@ class SSHManager:
         self._log_cache = {} # Cache for log file lists: {alias: (timestamp, [files])}
         self._container_cache = {} # Cache for containers: {alias: (timestamp, [containers])}
         self._client_pool = {} # Cache for SSH clients: {alias: paramiko.SSHClient}
+        self._client_pool_lock = threading.RLock()
 
     def update_servers(self, servers: List[Dict]) -> None:
-        """Update the configured servers without destroying internal caches."""
+        """Update configured servers and evict pooled clients whose connection config changed."""
+        old_servers_by_alias = self.servers_by_alias
         self.servers = servers
         self.servers_by_alias = {s['alias']: s for s in servers}
+        for alias in set(old_servers_by_alias) | set(self.servers_by_alias):
+            old = old_servers_by_alias.get(alias)
+            new = self.servers_by_alias.get(alias)
+            if old and new and self._connection_signature(old) == self._connection_signature(new):
+                continue
+            self.evict_client(alias)
 
+    def _connection_signature(self, config: Dict) -> tuple:
+        return (
+            config.get("host"),
+            int(config.get("port", 22)),
+            config.get("user", "root"),
+            config.get("auth_method", "key"),
+            config.get("password", ""),
+            config.get("key", ""),
+        )
 
     def get_server_aliases(self) -> List[str]:
         """Return a list of all server aliases for autocomplete."""
@@ -96,11 +122,11 @@ class SSHManager:
                 host_str = f"[{host}]:{port}" if port != 22 else host
                 
                 if trust_host:
-                    # Security: If key already exists but is different, block AutoAddPolicy
+                    # Security: If key already exists but is different, reject instead of replacing it.
                     if host_str in host_keys or host in host_keys:
                         client.set_missing_host_key_policy(paramiko.RejectPolicy())
                     else:
-                        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                        client.set_missing_host_key_policy(_TrustNewHostKeyPolicy(host_str))
                 else:
                     client.set_missing_host_key_policy(capture_policy)
                 
@@ -110,7 +136,8 @@ class SSHManager:
                 return False, f"Error: Failed to load SSH known_hosts from {known_hosts_path}.", capture_policy
         else:
             if trust_host:
-                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                host_str = f"[{host}]:{port}" if port != 22 else host
+                client.set_missing_host_key_policy(_TrustNewHostKeyPolicy(host_str))
             else:
                 client.set_missing_host_key_policy(capture_policy)
 
@@ -170,7 +197,8 @@ class SSHManager:
                         private_key = key_class.from_private_key(io.StringIO(key_value))
                         if private_key:
                             break
-                    except Exception:
+                    except Exception as exc:
+                        logger.debug("Private key did not parse as %s: %s", key_class.__name__, exc)
                         continue
 
                 if not private_key:
@@ -186,18 +214,28 @@ class SSHManager:
         return None
 
     def _get_pooled_client(self, alias: Optional[str]) -> Optional[paramiko.SSHClient]:
-        if not alias or alias not in self._client_pool:
-            return None
-        client = self._client_pool[alias]
-        transport = client.get_transport()
-        if transport and transport.is_active():
-            return client
-        try:
-            client.close()
-        except Exception:
-            pass
-        del self._client_pool[alias]
+        with self._client_pool_lock:
+            if not alias or alias not in self._client_pool:
+                return None
+            client = self._client_pool[alias]
+            transport = client.get_transport()
+            if transport and transport.is_active():
+                return client
+            try:
+                client.close()
+            except Exception as exc:
+                logger.debug("Failed to close inactive pooled SSH client for %s: %s", alias, exc)
+            del self._client_pool[alias]
         return None
+
+    def evict_client(self, alias: str) -> None:
+        with self._client_pool_lock:
+            client = self._client_pool.pop(alias, None)
+        if client:
+            try:
+                client.close()
+            except Exception as exc:
+                logger.debug("Failed to close pooled SSH client for %s: %s", alias, exc)
 
     def _save_host_keys_if_trusted(self, client: paramiko.SSHClient, host: str, known_hosts_path: str, trust_host: bool) -> Optional[str]:
         if not trust_host:
@@ -268,7 +306,8 @@ class SSHManager:
                 return None, err_msg, None
 
             if alias:
-                self._client_pool[alias] = client
+                with self._client_pool_lock:
+                    self._client_pool[alias] = client
 
             return client, None, None
         except Exception as e:
@@ -302,12 +341,12 @@ class SSHManager:
             if user != 'root' and command.startswith('sudo ') and password:
                 cmd_body = command[5:]
                 command_to_run = f'sudo -S -E env PATH="$PATH:{path_list}" {cmd_body}'
-                stdin, stdout, stderr = client.exec_command(command_to_run, timeout=60)
+                stdin, stdout, stderr = client.exec_command(command_to_run, timeout=60)  # nosec B601
                 stdin.write(password + '\n')
                 stdin.flush()
             else:
                 command_to_run = f'env PATH="$PATH:{path_list}" {command}'
-                stdin, stdout, stderr = client.exec_command(command_to_run, timeout=60)
+                stdin, stdout, stderr = client.exec_command(command_to_run, timeout=60)  # nosec B601
 
             output = stdout.read().decode('utf-8')
             error = stderr.read().decode('utf-8')
@@ -572,7 +611,7 @@ class SSHManager:
         try:
             transport = client.get_transport()
             channel = transport.open_session()
-            channel.exec_command(cmd)
+            channel.exec_command(cmd)  # nosec B601
             return f"✅ Command `{cmd}` sent to `{alias}`. Server is {action}ing..."
         except Exception as e:
             if "EOFError" in str(type(e)) or "Connection reset" in str(e):
@@ -584,9 +623,8 @@ class SSHManager:
         finally:
             # We are rebooting/shutting down, the connection will drop.
             # Evict from pool and close.
-            if alias in self._client_pool:
-                del self._client_pool[alias]
+            self.evict_client(alias)
             try:
                 client.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to close power-action SSH client for %s: %s", alias, exc)

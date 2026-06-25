@@ -112,6 +112,8 @@ class WebAppTests(unittest.TestCase):
             self.assertNotIn("onclick=", response.text)
             self.assertNotIn("onchange=", response.text)
             self.assertIn("script-src 'self' 'nonce-", response.headers["Content-Security-Policy"])
+            self.assertIn("ALLOWED_CONTAINERS", response.text)
+            self.assertIn("srvAllowedContainers", response.text)
         finally:
             client.close()
             patcher.stop()
@@ -718,6 +720,94 @@ class WebAppTests(unittest.TestCase):
             temp_dir.cleanup()
 
     @patch("ssh_manager.SSHManager.test_server_connection")
+    def test_existing_server_test_uses_edited_host_and_preserved_masked_secret(self, mock_test_conn):
+        temp_dir, patcher, client, state = self._build_client()
+        try:
+            from models import AppConfig, ServerSettings
+            config = AppConfig.model_validate(state.config.model_dump())
+            config.servers.append(ServerSettings(
+                alias="old_alias",
+                host="192.0.2.21",
+                user="root",
+                port=22,
+                auth_method="password",
+                password="real_password"
+            ))
+            state.save_config(config)
+
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+            home = client.get("/")
+            authed_csrf = home.text.split('meta name="csrf-token" content="', 1)[1].split('"', 1)[0]
+
+            mock_test_conn.return_value = (True, "OK", None)
+
+            response = client.post(
+                "/api/test-server",
+                headers={"X-CSRF-Token": authed_csrf},
+                json={
+                    "alias": "new_alias",
+                    "_original_alias": "old_alias",
+                    "host": "192.0.2.99",
+                    "user": "root",
+                    "port": 2222,
+                    "auth_method": "password",
+                    "password": "********",
+                    "trust_host": False,
+                },
+            )
+
+            self.assertEqual(response.status_code, 200)
+            call_args = mock_test_conn.call_args[0]
+            self.assertEqual(call_args[0]["host"], "192.0.2.99")
+            self.assertEqual(call_args[0]["port"], 2222)
+            self.assertEqual(call_args[0]["password"], "real_password")
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
+    @patch("ssh_manager.SSHManager.test_server_connection")
+    def test_test_server_rejects_masked_secret_for_unknown_original(self, mock_test_conn):
+        temp_dir, patcher, client, _state = self._build_client()
+        try:
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+            home = client.get("/")
+            authed_csrf = home.text.split('meta name="csrf-token" content="', 1)[1].split('"', 1)[0]
+
+            response = client.post(
+                "/api/test-server",
+                headers={"X-CSRF-Token": authed_csrf},
+                json={
+                    "alias": "missing",
+                    "host": "192.0.2.99",
+                    "user": "root",
+                    "port": 22,
+                    "auth_method": "password",
+                    "password": "********",
+                    "trust_host": False,
+                },
+            )
+
+            self.assertEqual(response.status_code, 400)
+            mock_test_conn.assert_not_called()
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
+    @patch("ssh_manager.SSHManager.test_server_connection")
     def test_example_server_obfuscated_key(self, mock_test_conn):
         temp_dir, patcher, client, state = self._build_client()
         try:
@@ -769,6 +859,71 @@ class WebAppTests(unittest.TestCase):
             call_args_key = mock_test_conn.call_args[0]
             self.assertEqual(call_args_key[0]["key"], "real_key")
 
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
+    def test_save_preserves_masked_secrets_by_original_alias_not_index(self):
+        temp_dir, patcher, client, state = self._build_client()
+        try:
+            from models import AppConfig, ServerSettings
+            config = AppConfig.model_validate(state.config.model_dump())
+            config.features.allowed_containers = "global_api"
+            config.servers = [
+                ServerSettings(alias="delete_me", host="192.0.2.1", auth_method="password", password="first_secret"),
+                ServerSettings(alias="keep_me", host="192.0.2.2", auth_method="password", password="second_secret", allowed_containers="redis"),
+            ]
+            state.save_config(config)
+
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+            home = client.get("/")
+            authed_csrf = home.text.split('meta name="csrf-token" content="', 1)[1].split('"', 1)[0]
+
+            response = client.post(
+                "/save",
+                headers={"X-CSRF-Token": authed_csrf},
+                json={
+                    "discord": {
+                        "token": "********",
+                        "guild_id": "",
+                        "allowed_roles": "Admin",
+                    },
+                    "features": {
+                        "enable_docker": True,
+                        "power_control_enabled": False,
+                        "power_control_password": "********",
+                        "allowed_containers": "global_api,global_worker",
+                    },
+                    "webui": {"enabled": True, "password": "********"},
+                    "servers": [
+                        {
+                            "alias": "keep_me",
+                            "_original_alias": "keep_me",
+                            "host": "192.0.2.22",
+                            "user": "root",
+                            "port": 22,
+                            "auth_method": "password",
+                            "password": "********",
+                            "key": "",
+                            "allowed_containers": "redis,postgres",
+                        }
+                    ],
+                },
+            )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(state.config.servers), 1)
+            self.assertEqual(state.config.servers[0].alias, "keep_me")
+            self.assertEqual(state.config.servers[0].password, "second_secret")
+            self.assertEqual(state.config.servers[0].allowed_containers, "redis,postgres")
+            self.assertEqual(state.config.features.allowed_containers, "global_api,global_worker")
         finally:
             client.close()
             patcher.stop()

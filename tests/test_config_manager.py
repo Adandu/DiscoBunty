@@ -105,6 +105,39 @@ class ConfigManagerTests(unittest.TestCase):
                 with self.assertRaises(ValidationError):
                     manager.import_raw_config(invalid_config)
 
+    def test_existing_malformed_config_is_not_overwritten_by_env_migration(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir, "config.json")
+            config_path.write_text("{ invalid json", encoding="utf-8")
+            env = {
+                "SECRET_KEY": "z" * 32,
+                "DATA_DIR": temp_dir,
+                "WEB_PASSWORD": "env-password",
+            }
+            with patch.dict(os.environ, env, clear=False):
+                with self.assertRaises(ValueError):
+                    ConfigManager()
+
+            self.assertEqual(config_path.read_text(encoding="utf-8"), "{ invalid json")
+
+    def test_invalid_encrypted_sensitive_value_fails_load(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            Path(temp_dir, "config.json").write_text(
+                json.dumps(
+                    {
+                        "discord": {"token": "ENC:not-valid"},
+                        "features": {},
+                        "webui": {},
+                        "servers": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = {"SECRET_KEY": "z" * 32, "DATA_DIR": temp_dir}
+            with patch.dict(os.environ, env, clear=False):
+                with self.assertRaises(ValueError):
+                    ConfigManager()
+
     def test_import_raw_config_invalid_type(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             env = {"SECRET_KEY": "z" * 32, "DATA_DIR": temp_dir}
@@ -116,8 +149,8 @@ class ConfigManagerTests(unittest.TestCase):
                     manager.import_raw_config(b"[]")
 
     @patch("config_manager.logger.error")
-    @patch("builtins.open", side_effect=PermissionError("Permission denied"))
-    def test_save_config_handles_exception(self, mock_open, mock_logger_error):
+    @patch("config_manager.os.replace", side_effect=PermissionError("Permission denied"))
+    def test_save_config_handles_exception(self, mock_replace, mock_logger_error):
         with tempfile.TemporaryDirectory() as temp_dir:
             env = {"SECRET_KEY": "z" * 32, "DATA_DIR": temp_dir}
             with patch.dict(os.environ, env, clear=False):

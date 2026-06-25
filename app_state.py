@@ -13,6 +13,7 @@ from ssh_manager import SSHManager
 
 MAX_MSG_LEN = 1900
 ALLOWED_LOG_ROOTS = ["/var/log/", "/home/"]
+MASKED_SECRET = "********"  # nosec B105
 
 
 class LoginRateLimiter:
@@ -121,19 +122,19 @@ class AppState:
     def masked_config_dict(self) -> dict:
         display_config = self.config.model_dump(by_alias=True)
         if display_config["discord"].get("token"):
-            display_config["discord"]["token"] = "********"
+            display_config["discord"]["token"] = MASKED_SECRET
         if display_config["webui"].get("password"):
-            display_config["webui"]["password"] = "********"
+            display_config["webui"]["password"] = MASKED_SECRET
         if display_config["features"].get("power_control_password"):
-            display_config["features"]["power_control_password"] = "********"
+            display_config["features"]["power_control_password"] = MASKED_SECRET
 
         for server in display_config["servers"]:
             if server.get("password"):
-                server["password"] = "********"
+                server["password"] = MASKED_SECRET
             key_value = server.get("key", "")
             if key_value and not key_value.startswith("/"):
                 if not os.path.isfile(key_value):
-                    server["key"] = "********"
+                    server["key"] = MASKED_SECRET
 
         return display_config
 
