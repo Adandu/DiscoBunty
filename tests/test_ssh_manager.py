@@ -225,6 +225,45 @@ class TestSSHManager(unittest.TestCase):
         )
         mock_execute_command.assert_called_once_with("alpha", expected_cmd)
 
+    def test_get_container_logs_no_search(self):
+        """Test get_container_logs without a search term."""
+        self.manager.execute_command = MagicMock(return_value="log1\nlog2")
+        res = self.manager.get_container_logs("alpha", "my_container")
+        self.assertEqual(res, "log1\nlog2")
+        self.manager.execute_command.assert_called_once_with(
+            "alpha",
+            "sudo docker logs --tail 50 my_container"
+        )
+
+    def test_get_container_logs_with_search(self):
+        """Test get_container_logs with a search term."""
+        self.manager.execute_command = MagicMock(return_value="error log")
+        res = self.manager.get_container_logs("alpha", "my_container", search="error")
+        self.assertEqual(res, "error log")
+        self.manager.execute_command.assert_called_once_with(
+            "alpha",
+            "sudo docker logs --tail 50 my_container 2>&1 | grep -i -e error | tail -n 50"
+        )
+
+    def test_get_container_logs_custom_lines(self):
+        """Test get_container_logs with custom number of lines."""
+        self.manager.execute_command = MagicMock(return_value="log1")
+        res = self.manager.get_container_logs("alpha", "my_container", lines=10)
+        self.assertEqual(res, "log1")
+        self.manager.execute_command.assert_called_once_with(
+            "alpha",
+            "sudo docker logs --tail 10 my_container"
+        )
+
+    def test_get_container_logs_shlex_quote(self):
+        """Test get_container_logs uses shlex.quote properly for safety."""
+        self.manager.execute_command = MagicMock(return_value="log1")
+        self.manager.get_container_logs("alpha", "my container", search="some 'term'")
+        self.manager.execute_command.assert_called_once_with(
+            "alpha",
+            'sudo docker logs --tail 50 \'my container\' 2>&1 | grep -i -e \'some \'"\'"\'term\'"\'"\'\' | tail -n 50'
+        )
+
     @patch("ssh_manager.os.path.realpath")
     @patch("ssh_manager.os.path.abspath")
     @patch("ssh_manager.os.getenv")
