@@ -46,5 +46,12 @@ class AuthUtilsTests(unittest.TestCase):
         # Invalid base64 digest
         self.assertFalse(verify_password("pass", f"{PASSWORD_HASH_PREFIX}$1000$c2FsdA==$dig$$est"))
 
+    def test_verify_password_exceptions(self):
+        from auth_utils import PASSWORD_HASH_PREFIX
+        # Test ValueError in int(iterations)
+        self.assertFalse(verify_password("pass", f"{PASSWORD_HASH_PREFIX}$badint$c2FsdA==$ZGlnZXN0"))
+        # Test base64 decoding Exception
+        self.assertFalse(verify_password("pass", f"{PASSWORD_HASH_PREFIX}$1000$!@#$$ZGlnZXN0"))
+
 if __name__ == "__main__":
     unittest.main()
