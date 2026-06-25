@@ -185,8 +185,6 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Failed to save {self.config_path}: {e}")
 
-    def get_server_config(self) -> list[dict]:
-        return [server.model_dump(by_alias=True) for server in self.config.servers]
 
     def export_raw_config(self) -> bytes:
         if not self.config_path.exists():

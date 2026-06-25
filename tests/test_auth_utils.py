@@ -9,7 +9,7 @@ class AuthUtilsTests(unittest.TestCase):
         from auth_utils import PASSWORD_HASH_PREFIX
         self.assertTrue(is_password_hash(f"{PASSWORD_HASH_PREFIX}$some$other$stuff"))
         self.assertFalse(is_password_hash(f"{PASSWORD_HASH_PREFIX}"))
-        self.assertFalse(is_password_hash(f"WRONG_PREFIX$some$stuff"))
+        self.assertFalse(is_password_hash("WRONG_PREFIX$some$stuff"))
         self.assertFalse(is_password_hash(""))
         self.assertFalse(is_password_hash(None))
         self.assertFalse(is_password_hash("legacy-plaintext"))
@@ -45,6 +45,13 @@ class AuthUtilsTests(unittest.TestCase):
         self.assertFalse(verify_password("pass", f"{PASSWORD_HASH_PREFIX}$1000$salt$$digest"))
         # Invalid base64 digest
         self.assertFalse(verify_password("pass", f"{PASSWORD_HASH_PREFIX}$1000$c2FsdA==$dig$$est"))
+
+    def test_verify_password_exceptions(self):
+        from auth_utils import PASSWORD_HASH_PREFIX
+        # Test ValueError in int(iterations)
+        self.assertFalse(verify_password("pass", f"{PASSWORD_HASH_PREFIX}$badint$c2FsdA==$ZGlnZXN0"))
+        # Test base64 decoding Exception
+        self.assertFalse(verify_password("pass", f"{PASSWORD_HASH_PREFIX}$1000$!@#$$ZGlnZXN0"))
 
 if __name__ == "__main__":
     unittest.main()

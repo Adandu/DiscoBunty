@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from collections import deque
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 from fastapi.testclient import TestClient
 
@@ -33,6 +33,38 @@ class WebAppTests(unittest.TestCase):
             state.save_config(config)
         client = TestClient(create_web_app(state))
         return temp_dir, patcher, client, state
+
+
+
+    @patch("app_state.AppState.read_audit_entries", new_callable=AsyncMock)
+    def test_get_audit_logs(self, mock_read_audit_entries):
+        temp_dir, patcher, client, state = self._build_client(with_password=True)
+        try:
+            # Unauthenticated request
+            response = client.get("/api/audit")
+            self.assertEqual(response.status_code, 401)
+
+            # Authenticated request
+            mock_read_audit_entries.return_value = ["log entry 1", "log entry 2"]
+
+            # Login to get authenticated session
+            login_page = client.get("/login")
+            self.assertEqual(login_page.status_code, 200)
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False
+            )
+
+            response = client.get("/api/audit")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), {"entries": ["log entry 1", "log entry 2"]})
+        finally:
+            temp_dir.cleanup()
+            patcher.stop()
+
 
     def test_login_and_health_flow(self):
         temp_dir, patcher, client, _state = self._build_client()
@@ -198,8 +230,6 @@ class WebAppTests(unittest.TestCase):
             from models import ServerSettings
             _state.config.servers = [ServerSettings(alias="example_server", host="192.0.2.50", user="test", password="original_server_password", key="original_server_key")]
             _state.save_config(_state.config)
-            original_webui_hash = _state.config.webui.password
-            original_power_hash = _state.config.features.power_control_password
 
 
             payload = _state.config.model_dump()
@@ -292,8 +322,6 @@ class WebAppTests(unittest.TestCase):
             from models import ServerSettings
             _state.config.servers = [ServerSettings(alias="example_server", host="192.0.2.50", user="test", password="original_server_password", key="original_server_key")]
             _state.save_config(_state.config)
-            original_webui_hash = _state.config.webui.password
-            original_power_hash = _state.config.features.power_control_password
 
 
             payload = _state.config.model_dump()
@@ -326,8 +354,6 @@ class WebAppTests(unittest.TestCase):
             from models import ServerSettings
             _state.config.servers = [ServerSettings(alias="example_server", host="192.0.2.50", user="test", password="original_server_password", key="original_server_key")]
             _state.save_config(_state.config)
-            original_webui_hash = _state.config.webui.password
-            original_power_hash = _state.config.features.power_control_password
 
             # Login
             login_page = client.get("/login")
@@ -348,8 +374,6 @@ class WebAppTests(unittest.TestCase):
             from models import ServerSettings
             _state.config.servers = [ServerSettings(alias="example_server", host="192.0.2.50", user="test", password="original_server_password", key="original_server_key")]
             _state.save_config(_state.config)
-            original_webui_hash = _state.config.webui.password
-            original_power_hash = _state.config.features.power_control_password
 
 
             payload = _state.config.model_dump()
@@ -681,6 +705,39 @@ class WebAppTests(unittest.TestCase):
             )
             self.assertEqual(resp.status_code, 429)
             self.assertEqual(resp.json()["detail"], "Too many requests. Please wait before testing again.")
+
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
+    def test_get_app_logs(self):
+        temp_dir, patcher, client, state = self._build_client()
+        try:
+            # Unauthenticated request should fail
+            response = client.get("/api/logs")
+            self.assertEqual(response.status_code, 401)
+
+            # Authenticate
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+
+            # Add some logs to the buffer
+            state.log_buffer.append("Log entry 1")
+            state.log_buffer.append("Log entry 2")
+
+            # Authenticated request should succeed
+            response = client.get("/api/logs")
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertIn("logs", data)
+            self.assertIn("Log entry 1", data["logs"])
+            self.assertIn("Log entry 2", data["logs"])
 
         finally:
             client.close()
