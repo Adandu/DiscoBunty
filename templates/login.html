@@ -6,10 +6,10 @@
     <title>DiscoBunty — Login</title>
     <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
     <link rel="shortcut icon" href="/static/logo.svg">
-    <script src="/static/js/tailwind.min.js"></script>
+    <script nonce="{{ request.state.csp_nonce }}" src="/static/js/tailwind.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" crossorigin="anonymous" />
-    <script id="tailwind-config">
+    <script nonce="{{ request.state.csp_nonce }}" id="tailwind-config">
         tailwind.config = {
             darkMode: "class",
             theme: {
