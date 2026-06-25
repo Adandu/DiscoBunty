@@ -687,6 +687,51 @@ class WebAppTests(unittest.TestCase):
             patcher.stop()
             temp_dir.cleanup()
 
+    @patch("ssh_manager.SSHManager.get_observability")
+    def test_server_overview_authenticated(self, mock_overview):
+        temp_dir, patcher, client, state = self._build_client()
+        try:
+            # Login
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+
+            mock_overview.return_value = {"status": "ok", "uptime": "10 days"}
+
+            # Add a server to config
+            from models import ServerSettings
+            server = ServerSettings(alias="test_server", host="192.0.2.1", user="root", port=22, auth_method="password", password="pass")
+            state.config.servers = [server]
+            state.refresh_runtime()
+
+            response = client.get("/api/servers/overview")
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertIn("results", data)
+            self.assertEqual(data["results"]["test_server"], {"status": "ok", "uptime": "10 days"})
+
+            mock_overview.assert_called_once_with("test_server", "", False)
+
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
+    def test_server_overview_unauthenticated(self):
+        temp_dir, patcher, client, _state = self._build_client()
+        try:
+            response = client.get("/api/servers/overview")
+            self.assertEqual(response.status_code, 401)
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
+
 class TestGetClientIp(unittest.TestCase):
     def _request(self, headers=None, client=("127.0.0.1", 8080), trusted_proxies="127.0.0.1"):
         from fastapi import FastAPI, Request
