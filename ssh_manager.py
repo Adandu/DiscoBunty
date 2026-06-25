@@ -128,8 +128,21 @@ class SSHManager:
             if not key_value:
                 return "Error: SSH Key not provided."
 
-            if key_value.startswith('/') or (os.path.exists(key_value) and os.path.isfile(key_value)):
-                client.connect(hostname=host, port=port, username=user, key_filename=key_value, timeout=10)
+            # Heuristic: If it has newlines, it's a raw key. Otherwise, treat as path if it looks like one.
+            if "\n" not in key_value and (key_value.startswith('/') or (os.path.exists(key_value) and os.path.isfile(key_value))):
+                try:
+                    resolved_path = os.path.realpath(key_value)
+                    # Docker default is /app/ssh_keys, fallback to ./ssh_keys
+                    default_keys_dir = "/app/ssh_keys" if os.path.exists("/app/ssh_keys") else os.path.abspath("ssh_keys")
+                    allowed_dir = os.path.abspath(os.getenv("SSH_KEYS_DIR", default_keys_dir))
+
+                    # Use os.path.commonpath to prevent traversal
+                    if os.path.commonpath([resolved_path, allowed_dir]) != allowed_dir:
+                        return f"Error: SSH key file must be located within the allowed directory ({allowed_dir})."
+                except Exception as e:
+                    return f"Error: Invalid SSH key path. ({str(e)})"
+
+                client.connect(hostname=host, port=port, username=user, key_filename=resolved_path, timeout=10)
             else:
                 private_key = None
                 for key_class in [paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey]:
