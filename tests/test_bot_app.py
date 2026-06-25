@@ -58,6 +58,22 @@ class BotPermissionTests(unittest.TestCase):
         self.assertTrue(predicate(allowed_interaction))
         self.assertFalse(predicate(denied_interaction))
 
+    def test_check_permissions_without_server_alias(self):
+        state = AppState.__new__(AppState)
+        state.config = AppConfig.model_validate({"discord": {"allowed_roles": "Admin"}})
+
+        # 1. User has required global roles
+        user_with_roles = SimpleNamespace(roles=[SimpleNamespace(name="Admin")])
+        self.assertTrue(check_permissions(state, user_with_roles))
+
+        # 2. User does not have required global roles
+        user_without_roles = SimpleNamespace(roles=[SimpleNamespace(name="User")])
+        self.assertFalse(check_permissions(state, user_without_roles))
+
+        # 3. User lacks 'roles' attribute completely
+        user_no_roles_attr = SimpleNamespace()
+        self.assertFalse(check_permissions(state, user_no_roles_attr))
+
     def test_server_role_scope_is_more_restrictive_than_global_roles(self):
         state = AppState.__new__(AppState)
         state.config = AppConfig.model_validate(
