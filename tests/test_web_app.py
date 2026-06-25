@@ -93,6 +93,30 @@ class WebAppTests(unittest.TestCase):
             patcher.stop()
             temp_dir.cleanup()
 
+    def test_dashboard_uses_csp_safe_event_handlers(self):
+        temp_dir, patcher, client, _state = self._build_client()
+        try:
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split(
+                '"', 1
+            )[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+
+            response = client.get("/")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn("onclick=", response.text)
+            self.assertNotIn("onchange=", response.text)
+            self.assertIn("script-src 'self' 'nonce-", response.headers["Content-Security-Policy"])
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
     def test_first_run_setup_flow(self):
         temp_dir, patcher, client, state = self._build_client(with_password=False)
         try:
