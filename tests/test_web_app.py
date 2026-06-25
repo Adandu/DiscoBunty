@@ -452,6 +452,98 @@ class WebAppTests(unittest.TestCase):
 
 
 
+
+    def test_bulk_server_check_unauthenticated(self):
+        temp_dir, patcher, client, _state = self._build_client()
+        try:
+            response = client.get("/api/servers/check")
+            self.assertEqual(response.status_code, 401)
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
+    def test_bulk_server_check_rate_limit(self):
+        temp_dir, patcher, client, state = self._build_client()
+        try:
+            # Login
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+
+            # Important: AppState inside FastAPI may be state, but we need to reset the correct limiter.
+            app_state = client.app.state.app_state
+
+            # Use a mock IP using headers just to isolate this test from other requests
+            headers = {"X-Real-IP": "192.168.1.100"}
+
+            app_state.api_limiter.max_attempts = 2
+
+            # Request 1
+            r1 = client.get("/api/servers/check", headers=headers)
+            self.assertEqual(r1.status_code, 200)
+
+            # Request 2
+            r2 = client.get("/api/servers/check", headers=headers)
+            self.assertEqual(r2.status_code, 200)
+
+            # Request 3 should fail
+            r3 = client.get("/api/servers/check", headers=headers)
+            self.assertEqual(r3.status_code, 429)
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
+    @patch("ssh_manager.SSHManager.check_server_capabilities")
+    def test_bulk_server_check_success(self, mock_check):
+        temp_dir, patcher, client, state = self._build_client()
+        try:
+            # Login
+            login_page = client.get("/login")
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False,
+            )
+
+            # Mock the SSH capabilities check return value
+            mock_check.return_value = {"status": "ok", "docker": True}
+
+            # Pre-populate some dummy servers
+            from models import ServerSettings
+            state.config.servers = [
+                ServerSettings(alias="test1", host="1.1.1.1", user="root", port=22, auth_method="password", password="123", backup_path="/backup1"),
+                ServerSettings(alias="test2", host="2.2.2.2", user="root", port=22, auth_method="password", password="123", backup_path="/backup2"),
+            ]
+            state.refresh_runtime()
+
+            response = client.get("/api/servers/check")
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+
+            self.assertIn("results", data)
+            self.assertEqual(len(data["results"]), 2)
+            self.assertIn({"status": "ok", "docker": True}, data["results"])
+
+            # Check that the mock was called correctly
+            self.assertEqual(mock_check.call_count, 2)
+            calls = mock_check.call_args_list
+            # The calls can be in any order because they are fanout tasks
+            called_aliases = [call[0][0] for call in calls]
+            self.assertIn("test1", called_aliases)
+            self.assertIn("test2", called_aliases)
+
+        finally:
+            client.close()
+            patcher.stop()
+            temp_dir.cleanup()
+
     def test_example_server_unauthenticated(self):
         temp_dir, patcher, client, _state = self._build_client()
         try:
