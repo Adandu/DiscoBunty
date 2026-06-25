@@ -132,5 +132,27 @@ class ConfigManagerTests(unittest.TestCase):
                 args, _ = mock_logger_error.call_args_list[-1]
                 self.assertIn("Failed to save", args[0])
                 self.assertIn("Permission denied", args[0])
+
+    def test_get_server_config(self):
+        from models import ServerSettings
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env = {"SECRET_KEY": "z" * 32, "DATA_DIR": temp_dir}
+            with patch.dict(os.environ, env, clear=False):
+                manager = ConfigManager()
+                srv1 = ServerSettings(alias="srv1", host="192.168.1.10", user="root")
+                srv2 = ServerSettings(alias="srv2", host="10.0.0.5", user="admin")
+                manager.config.servers = [srv1, srv2]
+
+                result = manager.get_server_config()
+
+                self.assertIsInstance(result, list)
+                self.assertEqual(len(result), 2)
+                self.assertIsInstance(result[0], dict)
+                self.assertIsInstance(result[1], dict)
+                self.assertEqual(result[0]["alias"], "srv1")
+                self.assertEqual(result[0]["host"], "192.168.1.10")
+                self.assertEqual(result[1]["alias"], "srv2")
+                self.assertEqual(result[1]["host"], "10.0.0.5")
+
 if __name__ == "__main__":
     unittest.main()
