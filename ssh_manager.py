@@ -275,10 +275,6 @@ class SSHManager:
         config = self.get_server_by_alias(alias)
         return self._execute_command_for_config(config, command, alias)
 
-    def _execute_command_on_config(self, config: Dict, command: str) -> str:
-        alias = config.get("alias", config.get("host", "unknown"))
-        return self._execute_command_for_config(config, command, alias)
-
     def _execute_command_for_config(self, config: Dict, command: str, alias: str) -> str:
         client, err, _ = self._get_ssh_client(config)
         if err:
@@ -330,7 +326,8 @@ class SSHManager:
         return containers
 
     def execute_probe(self, config: Dict, command: str) -> str:
-        return self._execute_command_on_config(config, command)
+        alias = config.get("alias", config.get("host", "unknown"))
+        return self._execute_command_for_config(config, command, alias)
 
     def get_observability(self, alias: str, backup_path: str = "", include_docker: bool = False) -> Dict[str, str]:
         metrics = {
