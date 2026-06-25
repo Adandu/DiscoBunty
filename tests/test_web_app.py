@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from collections import deque
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 from fastapi.testclient import TestClient
 
@@ -33,6 +33,38 @@ class WebAppTests(unittest.TestCase):
             state.save_config(config)
         client = TestClient(create_web_app(state))
         return temp_dir, patcher, client, state
+
+
+
+    @patch("app_state.AppState.read_audit_entries", new_callable=AsyncMock)
+    def test_get_audit_logs(self, mock_read_audit_entries):
+        temp_dir, patcher, client, state = self._build_client(with_password=True)
+        try:
+            # Unauthenticated request
+            response = client.get("/api/audit")
+            self.assertEqual(response.status_code, 401)
+
+            # Authenticated request
+            mock_read_audit_entries.return_value = ["log entry 1", "log entry 2"]
+
+            # Login to get authenticated session
+            login_page = client.get("/login")
+            self.assertEqual(login_page.status_code, 200)
+            csrf_token = login_page.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+
+            client.post(
+                "/login",
+                data={"password": "admin-pass", "csrf_token": csrf_token},
+                follow_redirects=False
+            )
+
+            response = client.get("/api/audit")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json(), {"entries": ["log entry 1", "log entry 2"]})
+        finally:
+            temp_dir.cleanup()
+            patcher.stop()
+
 
     def test_login_and_health_flow(self):
         temp_dir, patcher, client, _state = self._build_client()
